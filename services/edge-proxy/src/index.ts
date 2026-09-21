@@ -14,6 +14,7 @@ import {
   createHostOnlyCookie,
   getSessionFromRequest,
   createSessionToken,
+  createClearCookie,
   type AppSession,
 } from './session.js';
 import {
@@ -287,7 +288,10 @@ export function createEdgeProxyServer(options?: {
 
     const access = accessManager.evaluateAccess(currentUser, app);
     if (!access.allowed) {
-      res.writeHead(403, { 'Content-Type': 'text/html; charset=utf-8' });
+      res.writeHead(403, {
+        'Content-Type': 'text/html; charset=utf-8',
+        'Set-Cookie': createClearCookie(config.isProduction),
+      });
       res.end(renderNotAuthorizedPage(appKey, currentUser.email, currentUser.orgId, access.reason));
       return;
     }

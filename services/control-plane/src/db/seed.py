@@ -57,6 +57,9 @@ async def seed_database():
                 status="active",
             )
             print(f"  + Created owner user: {alice.email} ({alice.id})")
+        else:
+            alice.display_name = "Alice Owner"
+            await session.commit()
         alice_members = await user_dal.get_org_members(org.id)
         if not any(m.user_id == alice.id for m in alice_members):
             await user_dal.add_to_org(org.id, alice.id, platform_role="owner")
@@ -72,6 +75,9 @@ async def seed_database():
                 status="active",
             )
             print(f"  + Created colleague user: {bob.email} ({bob.id})")
+        else:
+            bob.display_name = "Bob Colleague"
+            await session.commit()
         bob_members = await user_dal.get_org_members(org.id)
         if not any(m.user_id == bob.id for m in bob_members):
             await user_dal.add_to_org(org.id, bob.id, platform_role="user")

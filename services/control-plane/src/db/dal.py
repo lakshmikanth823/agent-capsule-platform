@@ -299,11 +299,47 @@ class AppShareDAL:
         await self.session.flush()
         return share
 
-    async def list_shares_for_app(self, app_id: uuid.UUID) -> List[AppShare]:
+    async def get_share(self, share_id: uuid.UUID) -> Optional[AppShare]:
         result = await self.session.execute(
-            select(AppShare).where(AppShare.app_id == app_id)
+            select(AppShare).where(AppShare.id == share_id)
+        )
+        return result.scalar_one_or_none()
+
+    async def list_shares_for_app(
+        self, app_id: uuid.UUID, include_revoked: bool = True
+    ) -> List[AppShare]:
+        query = select(AppShare).where(AppShare.app_id == app_id)
+        if not include_revoked:
+            query = query.where(AppShare.status == "active")
+        result = await self.session.execute(query.order_by(AppShare.granted_at.desc()))
+        return list(result.scalars().all())
+
+    async def revoke_share(self, share_id: uuid.UUID) -> Optional[AppShare]:
+        share = await self.get_share(share_id)
+        if share:
+            share.status = "revoked"
+            await self.session.flush()
+        return share
+
+    async def find_active_shares_for_user(
+        self, app_id: uuid.UUID, user_id: uuid.UUID
+    ) -> List[AppShare]:
+        result = await self.session.execute(
+            select(AppShare).where(
+                and_(
+                    AppShare.app_id == app_id,
+                    AppShare.user_id == user_id,
+                    AppShare.status == "active",
+                )
+            )
         )
         return list(result.scalars().all())
+
+    async def get_share_policy(self, app_id: uuid.UUID) -> Optional[AppSharePolicy]:
+        result = await self.session.execute(
+            select(AppSharePolicy).where(AppSharePolicy.app_id == app_id)
+        )
+        return result.scalar_one_or_none()
 
     async def set_share_policy(
         self,

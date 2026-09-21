@@ -4,6 +4,7 @@
  * Implements TRD Sections 15 & 17:
  * - Checks user authorization against the app and organization.
  * - Maps user to platform role (Owner, Editor, User) and application role (declared by app).
+ * - Manages active/revoked user and group shares with immediate enforcement.
  */
 
 export interface AppMetadata {
@@ -16,6 +17,7 @@ export interface AppMetadata {
   manifest: Record<string, any>;
   bundlePath?: string;
   dataDir?: string;
+  defaultScope?: 'org' | 'restricted';
 }
 
 export interface UserContext {
@@ -24,6 +26,18 @@ export interface UserContext {
   orgId: string;
   platformRole: string;
   groups?: string[];
+}
+
+export interface ShareRecord {
+  id: string;
+  appKey: string;
+  userId?: string;
+  userEmail?: string;
+  groupName?: string;
+  appRole: string;
+  status: 'active' | 'revoked' | 'expired';
+  grantedAt: Date;
+  expiresAt?: Date;
 }
 
 export interface AccessEvaluation {
@@ -35,13 +49,78 @@ export interface AccessEvaluation {
 
 export class AccessManager {
   private appRegistry = new Map<string, AppMetadata>();
+  private shares = new Map<string, ShareRecord>(); // shareId -> ShareRecord
 
   registerApp(app: AppMetadata): void {
-    this.appRegistry.set(app.appKey, app);
+    this.appRegistry.set(app.appKey, {
+      defaultScope: 'org',
+      ...app,
+    });
   }
 
   getApp(appKey: string): AppMetadata | undefined {
     return this.appRegistry.get(appKey);
+  }
+
+  setAppDefaultScope(appKey: string, scope: 'org' | 'restricted'): void {
+    const app = this.appRegistry.get(appKey);
+    if (app) {
+      app.defaultScope = scope;
+    }
+  }
+
+  addShare(params: {
+    appKey: string;
+    userId?: string;
+    userEmail?: string;
+    groupName?: string;
+    appRole: string;
+    expiresAt?: Date;
+  }): ShareRecord {
+    const id = `share-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+    const share: ShareRecord = {
+      id,
+      appKey: params.appKey,
+      userId: params.userId,
+      userEmail: params.userEmail,
+      groupName: params.groupName,
+      appRole: params.appRole,
+      status: 'active',
+      grantedAt: new Date(),
+      expiresAt: params.expiresAt,
+    };
+    this.shares.set(id, share);
+    return share;
+  }
+
+  revokeShare(shareId: string): boolean {
+    const share = this.shares.get(shareId);
+    if (share) {
+      share.status = 'revoked';
+      return true;
+    }
+    return false;
+  }
+
+  revokeUserShares(appKey: string, userEmailOrId: string): void {
+    for (const share of this.shares.values()) {
+      if (
+        share.appKey === appKey &&
+        (share.userEmail === userEmailOrId || share.userId === userEmailOrId)
+      ) {
+        share.status = 'revoked';
+      }
+    }
+  }
+
+  listShares(appKey: string): ShareRecord[] {
+    const results: ShareRecord[] = [];
+    for (const share of this.shares.values()) {
+      if (share.appKey === appKey) {
+        results.push(share);
+      }
+    }
+    return results;
   }
 
   evaluateAccess(user: UserContext, app: AppMetadata): AccessEvaluation {
@@ -53,7 +132,7 @@ export class AccessManager {
       };
     }
 
-    // 2. Organization check (Alpha: org-scoped by default)
+    // 2. Organization check
     if (user.orgId !== app.organizationId) {
       return {
         allowed: false,
@@ -61,35 +140,86 @@ export class AccessManager {
       };
     }
 
-    // 3. Platform role mapping
     const platformRole = user.platformRole === 'owner' ? 'owner' : 'user';
-
-    // 4. Application role mapping
-    // Declared roles in manifest
     const declaredRoles: string[] = Array.isArray(app.manifest?.roles)
       ? app.manifest.roles
       : [];
 
-    let appRoles: string[] = [];
-
-    // Owner gets all declared roles or manager/hr if present
+    // 3. App Owner always has full access
     if (platformRole === 'owner') {
-      appRoles = declaredRoles.length > 0 ? declaredRoles : ['admin'];
-    } else {
-      // Default org member gets the base role (e.g. employee)
-      if (declaredRoles.includes('employee')) {
-        appRoles = ['employee'];
-      } else if (declaredRoles.length > 0) {
-        appRoles = [declaredRoles[0]];
-      } else {
-        appRoles = ['viewer'];
+      return {
+        allowed: true,
+        platformRole: 'owner',
+        appRoles: declaredRoles.length > 0 ? declaredRoles : ['admin'],
+      };
+    }
+
+    const now = new Date();
+    const appShares = this.listShares(app.appKey);
+
+    // 4. Check individual user shares
+    const userShares = appShares.filter(
+      (s) =>
+        (s.userId && s.userId === user.id) ||
+        (s.userEmail && s.userEmail.toLowerCase() === user.email.toLowerCase())
+    );
+
+    // If user has explicitly revoked shares and NO active shares, block them immediately
+    const activeUserShares = userShares.filter(
+      (s) => s.status === 'active' && (!s.expiresAt || s.expiresAt > now)
+    );
+    const hasRevokedUserShare = userShares.some((s) => s.status === 'revoked');
+
+    if (activeUserShares.length > 0) {
+      const mappedRoles = activeUserShares.map((s) => s.appRole);
+      return {
+        allowed: true,
+        platformRole,
+        appRoles: mappedRoles,
+      };
+    }
+
+    if (hasRevokedUserShare) {
+      return {
+        allowed: false,
+        reason: 'Access to this capsule has been revoked.',
+      };
+    }
+
+    // 5. Check group shares
+    if (user.groups && user.groups.length > 0) {
+      const activeGroupShares = appShares.filter(
+        (s) =>
+          s.groupName &&
+          user.groups!.includes(s.groupName) &&
+          s.status === 'active' &&
+          (!s.expiresAt || s.expiresAt > now)
+      );
+
+      if (activeGroupShares.length > 0) {
+        const groupRoles = activeGroupShares.map((s) => s.appRole);
+        return {
+          allowed: true,
+          platformRole,
+          appRoles: groupRoles,
+        };
       }
     }
 
+    // 6. Check default org policy
+    const defaultScope = app.defaultScope || 'org';
+    if (defaultScope === 'org' && user.orgId === app.organizationId) {
+      const defaultRole = declaredRoles.length > 0 ? declaredRoles[0] : 'employee';
+      return {
+        allowed: true,
+        platformRole,
+        appRoles: [defaultRole],
+      };
+    }
+
     return {
-      allowed: true,
-      platformRole,
-      appRoles,
+      allowed: false,
+      reason: 'No active share or permission found for this user.',
     };
   }
 }
