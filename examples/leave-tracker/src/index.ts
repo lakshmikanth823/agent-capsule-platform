@@ -1,8 +1,14 @@
 import http from 'node:http';
-import { parseIdentityHeader, getDatabase, type IdentityContext } from '@capsule/sdk';
+import {
+  getIdentity,
+  getDatabase,
+  getFiles,
+  type IdentityContext,
+} from '@capsule/sdk';
 
 const port = Number(process.env.PORT) || 3000;
 const db = getDatabase();
+const files = getFiles();
 
 // Initialize SQLite schema
 db.exec(`
@@ -29,9 +35,7 @@ function readBody(req: http.IncomingMessage): Promise<string> {
 }
 
 const server = http.createServer(async (req, res) => {
-  const identity: IdentityContext | null = parseIdentityHeader(
-    req.headers['x-capsule-identity'] as string | undefined
-  );
+  const identity: IdentityContext | null = getIdentity(req);
   const url = new URL(req.url || '/', `http://${req.headers.host || 'localhost'}`);
   const pathname = url.pathname;
 
@@ -54,11 +58,25 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  // 3. Leaves CRUD
+  // 3. Leaves CRUD - Supports per-user storage and reading
   if (pathname === '/api/leaves') {
     if (req.method === 'GET') {
-      const stmt = db.prepare('SELECT * FROM leave_requests ORDER BY id DESC');
-      const rows = stmt.all();
+      const targetUser = url.searchParams.get('user_id');
+      const userOnly = url.searchParams.get('user_only') === 'true';
+
+      let rows: any[];
+      if (targetUser) {
+        rows = db.query('SELECT * FROM leave_requests WHERE user_id = ? ORDER BY id DESC', [targetUser]);
+      } else if (userOnly && identity) {
+        rows = db.query('SELECT * FROM leave_requests WHERE user_id = ? ORDER BY id DESC', [identity.userId]);
+      } else if (identity && !identity.hasAnyRole('manager', 'hr', 'owner')) {
+        // Regular employees only see their own leave requests
+        rows = db.query('SELECT * FROM leave_requests WHERE user_id = ? ORDER BY id DESC', [identity.userId]);
+      } else {
+        // Managers, HR, or unconstrained requests see all
+        rows = db.query('SELECT * FROM leave_requests ORDER BY id DESC');
+      }
+
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ leaves: rows }));
       return;
@@ -68,16 +86,16 @@ const server = http.createServer(async (req, res) => {
       try {
         const rawBody = await readBody(req);
         const data = rawBody ? JSON.parse(rawBody) : {};
-        const userId = identity?.sub || data.user_id || 'anonymous';
+        const userId = identity?.userId || data.user_id || 'anonymous';
         const startDate = data.start_date || new Date().toISOString().split('T')[0];
         const endDate = data.end_date || startDate;
         const reason = data.reason || 'Personal leave';
 
-        const insertStmt = db.prepare(`
-          INSERT INTO leave_requests (user_id, start_date, end_date, reason)
-          VALUES (?, ?, ?, ?)
-        `);
-        const result = insertStmt.run(userId, startDate, endDate, reason);
+        const result = db.execute(
+          `INSERT INTO leave_requests (user_id, start_date, end_date, reason)
+           VALUES (?, ?, ?, ?)`,
+          [userId, startDate, endDate, reason]
+        );
 
         res.writeHead(201, { 'Content-Type': 'application/json' });
         res.end(
@@ -99,10 +117,55 @@ const server = http.createServer(async (req, res) => {
     }
   }
 
-  // 4. HTML root view
+  // 4. File / Blob storage attachments route
+  if (pathname === '/api/attachments') {
+    if (req.method === 'GET') {
+      const filePath = url.searchParams.get('path');
+      if (filePath) {
+        const file = await files.get(filePath);
+        if (!file) {
+          res.writeHead(404, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'File not found' }));
+          return;
+        }
+        res.writeHead(200, {
+          'Content-Type': file.contentType || 'application/octet-stream',
+          'Content-Length': file.size,
+        });
+        res.end(file.data);
+        return;
+      }
+
+      // List files
+      const fileList = await files.list();
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ files: fileList }));
+      return;
+    }
+
+    if (req.method === 'POST') {
+      try {
+        const rawBody = await readBody(req);
+        const data = rawBody ? JSON.parse(rawBody) : {};
+        const filePath = data.path || `leave-docs/${Date.now()}.txt`;
+        const content = data.content || '';
+        const contentType = data.contentType || 'text/plain';
+
+        const saved = await files.put(filePath, content, { contentType });
+        res.writeHead(201, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ success: true, file: saved }));
+        return;
+      } catch (err: any) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Failed to upload attachment', details: err.message }));
+        return;
+      }
+    }
+  }
+
+  // 5. HTML root view
   if (pathname === '/' && req.method === 'GET') {
-    const stmt = db.prepare('SELECT * FROM leave_requests ORDER BY id DESC LIMIT 10');
-    const rows = (stmt.all() as any[]) || [];
+    const rows = db.query('SELECT * FROM leave_requests ORDER BY id DESC LIMIT 10');
 
     const rowsHtml = rows
       .map(
@@ -130,8 +193,8 @@ const server = http.createServer(async (req, res) => {
     <h1>Leave Tracker Capsule</h1>
     <div class="card">
       <h3>Current Identity</h3>
-      <p><strong>User:</strong> ${identity?.sub || 'Anonymous'}</p>
-      <p><strong>Org:</strong> ${identity?.org_id || 'None'}</p>
+      <p><strong>User:</strong> ${identity?.userId || 'Anonymous'}</p>
+      <p><strong>Org:</strong> ${identity?.orgId || 'None'}</p>
       <p><strong>Roles:</strong> ${identity?.roles?.join(', ') || 'None'}</p>
       <p><strong>Groups:</strong> ${identity?.groups?.join(', ') || 'None'}</p>
     </div>

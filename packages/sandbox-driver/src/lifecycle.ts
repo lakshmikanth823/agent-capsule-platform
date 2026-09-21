@@ -66,25 +66,26 @@ export class CapsuleLifecycleManager {
   }): Promise<SandboxSpec> {
     const dataDir = params.customDataDir || path.join(this.baseDataDir, params.capsuleId, 'data');
     await fs.mkdir(dataDir, { recursive: true });
+    await fs.mkdir(path.join(dataDir, 'blobs'), { recursive: true });
 
-    // Ensure @capsule/sdk is available in bundle's node_modules if needed
+    // Ensure @capsule/sdk is available and up-to-date in bundle's node_modules
     const sdkTargetDir = path.join(params.bundlePath, 'node_modules', '@capsule', 'sdk');
-    try {
-      await fs.access(path.join(sdkTargetDir, 'package.json'));
-    } catch {
-      const possibleSdkDirs = [
-        path.resolve(process.cwd(), 'packages', 'sdk'),
-        path.resolve(process.cwd(), 'node_modules', '@capsule', 'sdk'),
-      ];
-      for (const sdkSourceDir of possibleSdkDirs) {
-        try {
-          await fs.mkdir(path.join(sdkTargetDir, 'dist'), { recursive: true });
-          await fs.copyFile(path.join(sdkSourceDir, 'package.json'), path.join(sdkTargetDir, 'package.json'));
-          await fs.copyFile(path.join(sdkSourceDir, 'dist', 'index.js'), path.join(sdkTargetDir, 'dist', 'index.js'));
-          break;
-        } catch {
-          // Continue
+    const possibleSdkDirs = [
+      path.resolve(process.cwd(), 'packages', 'sdk'),
+      path.resolve(process.cwd(), 'node_modules', '@capsule', 'sdk'),
+    ];
+    for (const sdkSourceDir of possibleSdkDirs) {
+      try {
+        const sourceDist = path.join(sdkSourceDir, 'dist');
+        const distFiles = await fs.readdir(sourceDist);
+        await fs.mkdir(path.join(sdkTargetDir, 'dist'), { recursive: true });
+        await fs.copyFile(path.join(sdkSourceDir, 'package.json'), path.join(sdkTargetDir, 'package.json'));
+        for (const file of distFiles) {
+          await fs.copyFile(path.join(sourceDist, file), path.join(sdkTargetDir, 'dist', file));
         }
+        break;
+      } catch {
+        // Continue
       }
     }
 
@@ -251,5 +252,21 @@ export class CapsuleLifecycleManager {
 
   listInstances(): SandboxInstance[] {
     return Array.from(this.instances.values());
+  }
+
+  /**
+   * Export the SQLite database for a capsule to a target path.
+   */
+  async exportDatabase(capsuleId: string, destinationPath: string): Promise<void> {
+    const dataDir = path.join(this.baseDataDir, capsuleId, 'data');
+    const dbFile = path.join(dataDir, 'app.sqlite');
+    try {
+      await fs.access(dbFile);
+    } catch {
+      throw new Error(`Database file does not exist for capsule ${capsuleId}`);
+    }
+    const destDir = path.dirname(path.resolve(destinationPath));
+    await fs.mkdir(destDir, { recursive: true });
+    await fs.copyFile(dbFile, destinationPath);
   }
 }

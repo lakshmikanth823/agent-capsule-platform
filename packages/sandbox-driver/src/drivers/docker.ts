@@ -56,11 +56,17 @@ export class DockerDevDriver implements SandboxDriver {
     const pidsLimit = spec.limits?.pidsLimit || 64;
     const networkMode = spec.networkMode || 'none';
 
-    // Ensure data directory exists on host
+    // Ensure data directory and blobs directory exist on host
     await fs.mkdir(spec.dataDir, { recursive: true });
+    await fs.mkdir(path.join(spec.dataDir, 'blobs'), { recursive: true });
 
     const normalizedAppDir = this.normalizePathForDocker(spec.bundlePath);
     const normalizedDataDir = this.normalizePathForDocker(spec.dataDir);
+
+    const dbMaxSizeMb =
+      spec.manifest?.capabilities?.db?.max_size_mb ||
+      spec.manifest?.limits?.db_max_mb ||
+      50;
 
     const dockerArgs = [
       'run',
@@ -76,7 +82,7 @@ export class DockerDevDriver implements SandboxDriver {
       // 4. Temporary writable scratch spaces
       '--tmpfs', '/tmp:rw,noexec,nosuid,size=64m',
       '--tmpfs', '/run:rw,noexec,nosuid,size=16m',
-      // 5. Volume mounts (read-only app code, writable data for SQLite)
+      // 5. Volume mounts (read-only app code, writable data for SQLite & blobs)
       '-v', `${normalizedAppDir}:/app:ro`,
       '-v', `${normalizedDataDir}:/data:rw`,
       // 6. Resource limits
@@ -91,7 +97,15 @@ export class DockerDevDriver implements SandboxDriver {
       '-e', 'NODE_ENV=production',
       '-e', 'PORT=3000',
       '-e', 'DATABASE_PATH=/data/app.sqlite',
+      '-e', 'CAPSULE_BLOB_DIR=/data/blobs',
+      '-e', `CAPSULE_ID=${spec.capsuleId}`,
+      '-e', `APP_ID=${spec.appKey}`,
+      '-e', `DB_MAX_SIZE_MB=${dbMaxSizeMb}`,
     ];
+
+    if (process.env.CAPSULE_IDENTITY_SECRET) {
+      dockerArgs.push('-e', `CAPSULE_IDENTITY_SECRET=${process.env.CAPSULE_IDENTITY_SECRET}`);
+    }
 
     if (spec.env) {
       for (const [key, value] of Object.entries(spec.env)) {
@@ -300,5 +314,28 @@ export class DockerDevDriver implements SandboxDriver {
       // Ignore if container is already gone
     }
     this.instances.delete(instanceId);
+  }
+
+  /**
+   * Export the SQLite database for an instance or data directory to a destination path.
+   */
+  async exportDatabase(instanceIdOrDataDir: string, destinationPath: string): Promise<void> {
+    let dbFile: string;
+    const instance = this.instances.get(instanceIdOrDataDir);
+    if (instance) {
+      dbFile = path.join(instance.spec.dataDir, 'app.sqlite');
+    } else {
+      dbFile = path.join(instanceIdOrDataDir, 'app.sqlite');
+    }
+
+    try {
+      await fs.access(dbFile);
+    } catch {
+      throw new Error(`Database file does not exist: ${dbFile}`);
+    }
+
+    const destDir = path.dirname(path.resolve(destinationPath));
+    await fs.mkdir(destDir, { recursive: true });
+    await fs.copyFile(dbFile, destinationPath);
   }
 }
