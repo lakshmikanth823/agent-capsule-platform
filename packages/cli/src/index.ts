@@ -1,4 +1,18 @@
+/**
+ * Software Capsule CLI (`capsule`)
+ * The primary agent- and developer-facing interface for the Capsule Platform.
+ */
 import { Command } from 'commander';
+import { loginCommand } from './commands/login.js';
+import { initCommand } from './commands/init.js';
+import { validateCommand } from './commands/validate.js';
+import { devCommand } from './commands/dev.js';
+import { publishCommand } from './commands/publish.js';
+import { shareAddCommand, shareListCommand, shareRevokeCommand } from './commands/share.js';
+import { unshareCommand } from './commands/unshare.js';
+import { statusCommand } from './commands/status.js';
+import { logsCommand } from './commands/logs.js';
+import { versionsCommand } from './commands/versions.js';
 
 export function createProgram(): Command {
   const program = new Command();
@@ -8,35 +22,52 @@ export function createProgram(): Command {
     .description('Software Capsule Platform CLI for publishing, sharing, and managing small apps')
     .version('0.1.0');
 
+  // 1. login
   program
-    .command('init')
-    .description('Initialize a new capsule in the current directory')
-    .action(() => {
-      console.log('Initializing capsule project...');
-    });
+    .command('login')
+    .description('Authenticate with the Capsule Platform')
+    .option('--user <email>', 'User email for local dev / mock authentication')
+    .option('--url <apiUrl>', 'Control-plane API base URL')
+    .option('--json', 'Output machine-readable JSON')
+    .action((opts) => loginCommand(opts));
 
+  // 2. init
+  program
+    .command('init [name]')
+    .description('Initialize a new capsule in the current or named directory')
+    .option('--json', 'Output machine-readable JSON')
+    .action((name, opts) => initCommand(name, opts));
+
+  // 3. validate
   program
     .command('validate')
-    .description('Validate capsule.manifest.yaml without deploying')
+    .description('Validate capsule.manifest.yaml offline without deploying')
+    .option('--manifest <path>', 'Path to manifest file (defaults to capsule.manifest.yaml)')
     .option('--json', 'Output machine-readable JSON')
-    .action((opts) => {
-      if (opts.json) {
-        console.log(JSON.stringify({ valid: true, errors: [] }));
-      } else {
-        console.log('Manifest is valid.');
-      }
-    });
+    .action((opts) => validateCommand(opts));
 
+  // 4. dev
+  program
+    .command('dev')
+    .description('Start local emulator for the blessed application shape')
+    .option('--port <port>', 'Local port to listen on (default 3000)')
+    .option('--json', 'Output machine-readable JSON')
+    .action((opts) => devCommand(opts));
+
+  // 5. publish
   program
     .command('publish')
-    .description('Publish the current capsule project')
+    .description('Idempotently publish the current capsule project')
+    .option('--description <desc>', 'Version release notes or description')
+    .option('--expected-version <n>', 'Enforce optimistic concurrency against current version')
     .option('--dry-run', 'Run validation and admission checks without deploying')
+    .option('--wait', 'Wait for deployment to become active')
+    .option('--manifest <path>', 'Path to manifest file')
+    .option('--idempotency-key <key>', 'Custom idempotency key (defaults to UUIDv4)')
     .option('--json', 'Output machine-readable JSON')
-    .action(() => {
-      console.log('Publishing capsule...');
-    });
+    .action((opts) => publishCommand(opts));
 
-  // Sharing command tree per API/CLI spec
+  // 6. share command tree
   const shareCmd = program
     .command('share')
     .description('Manage capsule sharing and application role assignments');
@@ -50,59 +81,55 @@ export function createProgram(): Command {
     .option('--app <appKey>', 'Target capsule ID or key')
     .option('--expires-at <timestamp>', 'Optional expiration timestamp (ISO 8601)')
     .option('--json', 'Output machine-readable JSON')
-    .action((opts) => {
-      const result = {
-        action: 'share_added',
-        app: opts.app || 'current-app',
-        user: opts.user,
-        group: opts.group,
-        role: opts.role,
-        expires_at: opts.expiresAt,
-        status: 'active',
-      };
-      if (opts.json) {
-        console.log(JSON.stringify(result));
-      } else {
-        const target = opts.user ? `user ${opts.user}` : `group ${opts.group}`;
-        console.log(`Shared capsule with ${target} as role '${opts.role}'.`);
-      }
-    });
+    .action((opts) => shareAddCommand(opts));
 
   shareCmd
     .command('list')
     .description('List current sharing assignments for a capsule')
     .option('--app <appKey>', 'Target capsule ID or key')
     .option('--json', 'Output machine-readable JSON')
-    .action((opts) => {
-      const result = {
-        app: opts.app || 'current-app',
-        shares: [],
-        default_scope: 'org',
-      };
-      if (opts.json) {
-        console.log(JSON.stringify(result));
-      } else {
-        console.log('Current shares: (none or org-default)');
-      }
-    });
+    .action((opts) => shareListCommand(opts));
 
   shareCmd
     .command('revoke <shareId>')
     .description('Revoke an existing sharing assignment by share ID')
     .option('--app <appKey>', 'Target capsule ID or key')
     .option('--json', 'Output machine-readable JSON')
-    .action((shareId, opts) => {
-      const result = {
-        action: 'share_revoked',
-        share_id: shareId,
-        status: 'revoked',
-      };
-      if (opts.json) {
-        console.log(JSON.stringify(result));
-      } else {
-        console.log(`Revoked share ${shareId}.`);
-      }
-    });
+    .action((shareId, opts) => shareRevokeCommand(shareId, opts));
+
+  // 7. unshare alias
+  program
+    .command('unshare <shareId>')
+    .description('Revoke an existing sharing assignment (alias for `capsule share revoke`)')
+    .option('--app <appKey>', 'Target capsule ID or key')
+    .option('--json', 'Output machine-readable JSON')
+    .action((shareId, opts) => unshareCommand(shareId, opts));
+
+  // 8. status
+  program
+    .command('status')
+    .description('Query current capsule status and active deployment')
+    .option('--app <appKey>', 'Target capsule ID or key')
+    .option('--json', 'Output machine-readable JSON')
+    .action((opts) => statusCommand(opts));
+
+  // 9. logs
+  program
+    .command('logs')
+    .description('Retrieve logs from the capsule container')
+    .option('--app <appKey>', 'Target capsule ID or key')
+    .option('--tail <n>', 'Number of lines to return')
+    .option('--follow', 'Follow log output')
+    .option('--json', 'Output machine-readable JSON')
+    .action((opts) => logsCommand(opts));
+
+  // 10. versions
+  program
+    .command('versions')
+    .description('List published version history for a capsule')
+    .option('--app <appKey>', 'Target capsule ID or key')
+    .option('--json', 'Output machine-readable JSON')
+    .action((opts) => versionsCommand(opts));
 
   return program;
 }
