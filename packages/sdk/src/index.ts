@@ -31,6 +31,13 @@ import {
   type DevTokenOptions,
   type EmulatorConfig,
 } from './emulator.js';
+import {
+  getConnector,
+  PlatformConnectorClient,
+  ConnectorError,
+  type ConnectorClient,
+  type ConnectorInvokeOptions,
+} from './connectors.js';
 
 export {
   // Database
@@ -60,6 +67,12 @@ export {
   setupEmulator,
   DevTokenOptions,
   EmulatorConfig,
+  // Connectors
+  getConnector,
+  PlatformConnectorClient,
+  ConnectorError,
+  ConnectorClient,
+  ConnectorInvokeOptions,
 };
 
 /**
@@ -88,6 +101,11 @@ export const sdk = {
   },
   get files() {
     return getFiles();
+  },
+  connector: (name: string) => getConnector(name),
+  connectors: {
+    invoke: (name: string, payload: any, options?: ConnectorInvokeOptions) =>
+      getConnector(name).invoke(payload, options),
   },
   getIdentity,
   requireIdentity,

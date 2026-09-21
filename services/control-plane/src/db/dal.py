@@ -2,7 +2,7 @@
 Typed Data Access Layer (DAL) for Software Capsule Platform Control Plane
 """
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional, List, Dict, Any
 
 from sqlalchemy import select, update, delete, and_, func
@@ -10,8 +10,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from .models import (
     Organization, User, OrganizationMember, App,
-    AppShare, AppSharePolicy, AppVersion, AuditEvent, CapabilityApproval
+    AppShare, AppSharePolicy, AppVersion, AuditEvent, CapabilityApproval,
+    ConnectorCredential
 )
+from crypto import encrypt_secret, decrypt_secret
 
 
 class OrganizationDAL:
@@ -495,7 +497,122 @@ class CapabilityApprovalDAL:
             return None
         approval.status = decision
         approval.approved_by_user_id = decided_by_user_id
-        approval.decided_at = datetime.utcnow()
+        approval.decided_at = datetime.now(timezone.utc)
         await self.session.flush()
         return approval
+
+
+class ConnectorCredentialDAL:
+    def __init__(self, session: AsyncSession):
+        self.session = session
+
+    async def set_credential(
+        self,
+        organization_id: uuid.UUID,
+        connector_name: str,
+        identity_type: str,
+        credential_data: Any,
+        user_id: Optional[uuid.UUID] = None,
+        app_id: Optional[uuid.UUID] = None,
+    ) -> ConnectorCredential:
+        encrypted = encrypt_secret(credential_data)
+        query = select(ConnectorCredential).where(
+            ConnectorCredential.organization_id == organization_id,
+            ConnectorCredential.connector_name == connector_name,
+            ConnectorCredential.identity_type == identity_type,
+            ConnectorCredential.user_id == user_id,
+        )
+        res = await self.session.execute(query)
+        existing = res.scalar_one_or_none()
+        if existing:
+            existing.encrypted_data = encrypted
+            existing.app_id = app_id
+            existing.updated_at = datetime.now(timezone.utc)
+            await self.session.flush()
+            return existing
+
+        cred = ConnectorCredential(
+            organization_id=organization_id,
+            app_id=app_id,
+            connector_name=connector_name,
+            identity_type=identity_type,
+            user_id=user_id,
+            encrypted_data=encrypted,
+            key_id="v1",
+        )
+        self.session.add(cred)
+        await self.session.flush()
+        return cred
+
+    async def get_credential(
+        self,
+        organization_id: uuid.UUID,
+        connector_name: str,
+        identity_type: str = "service",
+        user_id: Optional[uuid.UUID] = None,
+    ) -> Optional[Any]:
+        query = select(ConnectorCredential).where(
+            ConnectorCredential.organization_id == organization_id,
+            ConnectorCredential.connector_name == connector_name,
+            ConnectorCredential.identity_type == identity_type,
+            ConnectorCredential.user_id == user_id,
+        )
+        res = await self.session.execute(query)
+        cred = res.scalar_one_or_none()
+        if not cred:
+            return None
+        return decrypt_secret(cred.encrypted_data)
+
+    async def get_credential_record(
+        self,
+        organization_id: uuid.UUID,
+        connector_name: str,
+        identity_type: str = "service",
+        user_id: Optional[uuid.UUID] = None,
+    ) -> Optional[ConnectorCredential]:
+        query = select(ConnectorCredential).where(
+            ConnectorCredential.organization_id == organization_id,
+            ConnectorCredential.connector_name == connector_name,
+            ConnectorCredential.identity_type == identity_type,
+            ConnectorCredential.user_id == user_id,
+        )
+        res = await self.session.execute(query)
+        return res.scalar_one_or_none()
+
+    async def delete_credential(
+        self,
+        organization_id: uuid.UUID,
+        connector_name: str,
+        identity_type: str = "service",
+        user_id: Optional[uuid.UUID] = None,
+    ) -> bool:
+        record = await self.get_credential_record(organization_id, connector_name, identity_type, user_id)
+        if not record:
+            return False
+        await self.session.delete(record)
+        await self.session.flush()
+        return True
+
+    async def list_credentials_metadata(
+        self, organization_id: uuid.UUID
+    ) -> List[Dict[str, Any]]:
+        query = (
+            select(ConnectorCredential)
+            .where(ConnectorCredential.organization_id == organization_id)
+            .order_by(ConnectorCredential.connector_name.asc())
+        )
+        res = await self.session.execute(query)
+        records = res.scalars().all()
+        return [
+            {
+                "id": str(r.id),
+                "connector_name": r.connector_name,
+                "identity_type": r.identity_type,
+                "user_id": str(r.user_id) if r.user_id else None,
+                "app_id": str(r.app_id) if r.app_id else None,
+                "created_at": r.created_at.isoformat() if r.created_at else None,
+                "updated_at": r.updated_at.isoformat() if r.updated_at else None,
+            }
+            for r in records
+        ]
 

@@ -129,11 +129,33 @@ export const ShareDialog: React.FC<ShareDialogProps> = ({
   const dbLimit = app.manifest?.capabilities?.db?.size_limit_mb || 500;
   const filesLimit = app.manifest?.capabilities?.files?.size_limit_mb || 200;
   const egressList = app.manifest?.capabilities?.network?.egress || [];
-  const connectors = app.manifest?.capabilities?.connectors || {
-    slack: { channel: '#hr-leave', as_service_identity: true },
-    sheets: { access: 'readonly' }
-  };
-  const hasServiceIdentity = Object.values(connectors).some((c: any) => c.as_service_identity);
+  // Parse connectors dynamically from manifest
+  const rawConnectors = app.manifest?.capabilities?.connectors;
+  const parsedConnectors: Array<{ name: string; channel?: string; acts_as: string }> = [];
+  if (Array.isArray(rawConnectors)) {
+    for (const c of rawConnectors) {
+      if (typeof c === 'string') {
+        parsedConnectors.push({ name: c, acts_as: 'viewer' });
+      } else if (c && typeof c === 'object') {
+        parsedConnectors.push({
+          name: c.name || 'unnamed',
+          channel: c.channel,
+          acts_as: c.acts_as || c.identity || 'viewer',
+        });
+      }
+    }
+  } else if (rawConnectors && typeof rawConnectors === 'object') {
+    for (const [name, val] of Object.entries(rawConnectors)) {
+      const v: any = val;
+      parsedConnectors.push({
+        name,
+        channel: v?.channel,
+        acts_as: v?.as_service_identity || v?.acts_as === 'service' ? 'service' : 'viewer',
+      });
+    }
+  }
+  const hasConnectors = parsedConnectors.length > 0;
+  const hasServiceIdentity = parsedConnectors.some((c) => c.acts_as === 'service');
 
   return (
     <div 
@@ -367,9 +389,26 @@ export const ShareDialog: React.FC<ShareDialogProps> = ({
                     </span>
                   )}
                 </div>
-                <p className="text-xs text-slate-700 font-medium">
-                  Slack: post to #hr-leave as service identity; Sheets: read-only viewer.
-                </p>
+                {hasConnectors ? (
+                  <div className="space-y-1 my-1">
+                    {parsedConnectors.map((c, idx) => (
+                      <div key={idx} className="flex items-center justify-between text-xs">
+                        <span className="font-medium text-slate-800">
+                          {c.name}{c.channel ? ` (${c.channel})` : ''}
+                        </span>
+                        <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${
+                          c.acts_as === 'service' 
+                            ? 'bg-amber-100 text-amber-900 border border-amber-300' 
+                            : 'bg-slate-100 text-slate-600'
+                        }`}>
+                          {c.acts_as === 'service' ? 'Service' : 'Viewer'}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-xs text-slate-500">No external connectors configured.</p>
+                )}
                 {hasServiceIdentity && (
                   <p className="mt-1 text-[11px] text-amber-800 font-semibold">
                     ⚠️ Acts as a service identity (autonomous actions without human approval).

@@ -201,3 +201,67 @@ In emulator mode:
 npx tsx src/index.ts
 ```
 The application starts and operates with zero platform dependencies.
+
+---
+
+## 6. Connectors (`sdk.connector`)
+
+Capsule applications never receive raw API keys, bot tokens, or webhook secrets. All external service interactions flow through the platform **Credential Broker**, which injects credentials at the egress layer.
+
+### Security Guarantees
+- **Zero Raw Secrets**: Apps cannot read connector secrets from environment variables, files, SQLite, or logs.
+- **Declared Capabilities**: An app can only invoke connectors explicitly declared in its `capsule.manifest.yaml`.
+- **Identity Enforcement**:
+  - `acts_as: viewer` (default): Uses the signed-in viewer's credentials/permissions.
+  - `acts_as: service`: Autonomous actions with service credentials; requires explicit manifest configuration and organization policy permission.
+
+### Examples for AI Agents
+
+#### Post Message to Slack (`slack.post`)
+```typescript
+import { sdk } from '@capsule/sdk';
+
+// 1. Invoke declared slack.post connector
+const result = await sdk.connector('slack.post').invoke({
+  channel: '#hr-leave',
+  text: 'Alice submitted a new vacation request for July 1-5.',
+});
+
+if (result.ok) {
+  console.log('Message posted successfully, timestamp:', result.ts);
+} else {
+  console.error('Failed to post message:', result.error);
+}
+```
+
+#### Test / Echo Connector (`fake.echo`)
+```typescript
+import { sdk } from '@capsule/sdk';
+
+// 2. Invoke test echo connector
+const response = await sdk.connector('fake.echo').invoke({
+  message: 'Ping from Capsule application',
+});
+
+console.log('Echo response:', response.echo);
+console.log('Credential verified by broker:', response.credential_attached);
+```
+
+#### Forwarding Viewer Identity
+When invoking a connector inside an HTTP request handler, forward the viewer's `x-capsule-identity` header so the connector acts as the viewer:
+```typescript
+import http from 'node:http';
+import { sdk } from '@capsule/sdk';
+
+const server = http.createServer(async (req, res) => {
+  const identityHeader = req.headers['x-capsule-identity'] as string | undefined;
+
+  const result = await sdk.connector('sheets.read').invoke(
+    { sheetId: '1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms', range: 'A1:D10' },
+    { identityHeader }
+  );
+
+  res.writeHead(200, { 'Content-Type': 'application/json' });
+  res.end(JSON.stringify(result));
+});
+```
