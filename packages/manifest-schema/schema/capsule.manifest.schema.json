@@ -1,0 +1,228 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/capsule/v1alpha1/manifest.schema.json",
+  "title": "Software Capsule Manifest",
+  "description": "Manifest contract for an agent-published Software Capsule. Platform policy may impose stricter limits than this schema.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "apiVersion",
+    "id",
+    "name",
+    "shape",
+    "runtime"
+  ],
+  "properties": {
+    "apiVersion": {
+      "type": "string",
+      "const": "capsule/v1alpha1"
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9-]{0,62}$",
+      "description": "Stable capsule identifier."
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 80
+    },
+    "shape": {
+      "type": "string",
+      "const": "web-app"
+    },
+    "runtime": {
+      "type": "string",
+      "const": "node22"
+    },
+    "roles": {
+      "type": "array",
+      "uniqueItems": true,
+      "minItems": 1,
+      "maxItems": 32,
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z][a-z0-9_-]{0,31}$"
+      }
+    },
+    "capabilities": {
+      "$ref": "#/$defs/capabilities"
+    },
+    "egress": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 253
+      },
+      "description": "Explicit network destinations. Empty means default-deny egress."
+    },
+    "schedule": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/schedule"
+      }
+    },
+    "sharing": {
+      "$ref": "#/$defs/sharing"
+    },
+    "limits": {
+      "$ref": "#/$defs/limits"
+    }
+  },
+  "$defs": {
+    "capabilities": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "db": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "type"
+          ],
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "sqlite"
+            }
+          }
+        },
+        "identity": {
+          "type": "boolean"
+        },
+        "files": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "max_mb"
+          ],
+          "properties": {
+            "max_mb": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 10240
+            }
+          }
+        },
+        "ai": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "monthly_budget_usd"
+          ],
+          "properties": {
+            "monthly_budget_usd": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 100000
+            }
+          }
+        },
+        "connectors": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/connector"
+          }
+        }
+      }
+    },
+    "connector": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "acts_as"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9._-]{1,127}$"
+        },
+        "channel": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "acts_as": {
+          "type": "string",
+          "enum": [
+            "viewer",
+            "service"
+          ]
+        }
+      }
+    },
+    "schedule": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "cron",
+        "handler"
+      ],
+      "properties": {
+        "cron": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "handler": {
+          "type": "string",
+          "pattern": "^[A-Za-z_$][A-Za-z0-9_$.-]{0,127}$"
+        }
+      }
+    },
+    "sharing": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "default": {
+          "type": "string",
+          "enum": [
+            "org"
+          ]
+        }
+      },
+      "required": [
+        "default"
+      ]
+    },
+    "limits": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "cpu": {
+          "type": "string",
+          "enum": [
+            "small"
+          ]
+        },
+        "memory_mb": {
+          "type": "integer",
+          "minimum": 64,
+          "maximum": 16384
+        },
+        "request_timeout_s": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 300
+        },
+        "db_max_mb": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 102400
+        },
+        "blob_max_mb": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 102400
+        },
+        "max_active_instances": {
+          "type": "integer",
+          "const": 1
+        }
+      }
+    }
+  }
+}
