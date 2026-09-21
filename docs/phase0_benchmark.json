@@ -1,0 +1,42 @@
+{
+  "scenario": "Phase 0 E2E Lifecycle & Timing",
+  "steps": {
+    "init": {
+      "success": true,
+      "app": "phase0-app",
+      "files": [
+        "capsule.manifest.yaml",
+        "package.json",
+        "src",
+        "tsconfig.json"
+      ]
+    },
+    "publish": {
+      "success": true,
+      "durationSec": 0.218,
+      "thresholdSec": 60
+    },
+    "share": {
+      "success": true,
+      "user": "bob@example.com",
+      "role": "employee"
+    },
+    "browserFirstRender": {
+      "success": true,
+      "durationMs": 3468,
+      "user": "bob@example.com",
+      "cookieDomain": "phase0-app.apps.localhost"
+    },
+    "coldStart": {
+      "success": true,
+      "durationMs": 89,
+      "identityVerified": true
+    }
+  },
+  "timings": {
+    "publishToLiveSec": 0.218,
+    "linkToFirstRenderMs": 3468,
+    "coldStartMs": 89
+  },
+  "status": "PASSED"
+}

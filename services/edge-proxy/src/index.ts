@@ -108,6 +108,63 @@ export function createEdgeProxyServer(options?: {
     });
   }
 
+  // Helper to dynamically resolve apps and shares from control plane
+  async function resolveApp(appKey: string): Promise<any> {
+    let app = accessManager.getApp(appKey);
+
+    // Try fetching from control plane if not registered or to refresh shares
+    try {
+      const controlPlaneUrl = process.env.CONTROL_PLANE_URL || 'http://127.0.0.1:8000';
+      const res = await fetch(`${controlPlaneUrl}/v1/apps/${appKey}`, {
+        headers: { Authorization: 'Bearer mock-alice-token' },
+      });
+      if (res.ok) {
+        const data = (await res.json()) as any;
+        const sharesRes = await fetch(`${controlPlaneUrl}/v1/apps/${appKey}/shares`, {
+          headers: { Authorization: 'Bearer mock-alice-token' },
+        });
+        const sharesData = (sharesRes.ok ? await sharesRes.json() : { shares: [] }) as any;
+
+        if (!app) {
+          app = {
+            id: data.id,
+            appKey: data.app_key,
+            name: data.name,
+            organizationId: data.organization_id,
+            status: data.status,
+            currentVersionId: data.current_version_id,
+            manifest: data.manifest || { id: appKey, roles: ['employee', 'manager'] },
+            bundlePath: path.resolve(`examples/${appKey}`),
+            dataDir: path.resolve(`data/capsules/${appKey}/data`),
+          };
+          accessManager.registerApp(app);
+        }
+
+        // Synchronize shares
+        for (const s of sharesData.shares || []) {
+          if (s.status === 'active') {
+            const existing = accessManager.listShares(appKey);
+            const alreadyPresent = existing.some(
+              (ex) => (ex.userEmail === s.user_email || ex.userId === s.user_id) && ex.status === 'active'
+            );
+            if (!alreadyPresent) {
+              accessManager.addShare({
+                appKey,
+                userId: s.user_id,
+                userEmail: s.user_email,
+                groupName: s.group_name,
+                appRole: s.app_role,
+              });
+            }
+          }
+        }
+      }
+    } catch {
+      // ignore
+    }
+    return app || accessManager.getApp(appKey);
+  }
+
   const server = http.createServer(async (req, res) => {
     applySecurityHeaders(res, config.isProduction);
 
@@ -158,7 +215,15 @@ export function createEdgeProxyServer(options?: {
           },
         };
 
-        const user = mockUsers[userChoice] || mockUsers.alice;
+        const user = { ...(mockUsers[userChoice] || mockUsers.alice) };
+
+        // In dev mock IdP, align orgId with targetApp organization if available (unless external user Charlie)
+        if (userChoice !== 'charlie' && targetApp) {
+          const targetAppMeta = await resolveApp(targetApp);
+          if (targetAppMeta && targetAppMeta.organizationId) {
+            user.orgId = targetAppMeta.organizationId;
+          }
+        }
 
         // Generate short-lived (60s) single-use handshake ticket
         const ticketPayload = {
@@ -282,7 +347,7 @@ export function createEdgeProxyServer(options?: {
       };
 
       // Check app existence and access
-      const app = accessManager.getApp(appKey);
+      const app = await resolveApp(appKey);
       if (!app) {
         res.writeHead(404, { 'Content-Type': 'text/html; charset=utf-8' });
         res.end(renderAppNotFoundPage(appKey, hostHeader));
@@ -330,7 +395,7 @@ export function createEdgeProxyServer(options?: {
     }
 
     // C. Check App Existence and Authorization
-    const app = accessManager.getApp(appKey);
+    const app = await resolveApp(appKey);
     if (!app) {
       res.writeHead(404, { 'Content-Type': 'text/html; charset=utf-8' });
       res.end(renderAppNotFoundPage(appKey, hostHeader));

@@ -200,7 +200,27 @@ async def create_app_share(
             detail="Must specify at least one of user_email, user_id, or group_name",
         )
 
-    # 4. Create or update share
+    # 4. Check if share already exists (idempotent share)
+    if target_user_id:
+        existing_shares = await share_dal.find_active_shares_for_user(app.id, target_user_id)
+        matching = next((s for s in existing_shares if s.app_role == payload.app_role), None)
+        if matching:
+            return AppShareResponse(
+                id=str(matching.id),
+                app_id=str(matching.app_id),
+                user_id=str(matching.user_id) if matching.user_id else None,
+                user_email=payload.user_email,
+                group_name=payload.group_name,
+                grant_type=grant_type,
+                app_role=matching.app_role or "employee",
+                status=matching.status,
+                granted_by_user_id=str(matching.granted_by_user_id) if matching.granted_by_user_id else None,
+                granted_at=matching.granted_at,
+                expires_at=matching.expires_at,
+                metadata=matching.metadata_ or {},
+            )
+
+    # 5. Create or update share
     share = await share_dal.create_share(
         app_id=app.id,
         user_id=target_user_id,
@@ -211,7 +231,7 @@ async def create_app_share(
         metadata=metadata,
     )
 
-    # 5. Write audit event
+    # 6. Write audit event
     await audit_dal.record_event(
         action="app.share.create",
         outcome="success",
@@ -227,6 +247,7 @@ async def create_app_share(
             "grant_type": grant_type,
         },
     )
+    await db.commit()
 
     return AppShareResponse(
         id=str(share.id),

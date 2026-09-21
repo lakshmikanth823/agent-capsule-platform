@@ -113,7 +113,7 @@ export async function publishCommand(options: PublishOptions = {}): Promise<void
   try {
     await client.getApp(appKey);
   } catch (err: any) {
-    if (err.code === 'NOT_FOUND' || err.exitCode === 2) {
+    if (err.code === 'NOT_FOUND' || err.code === 'APP_NOT_FOUND' || err.exitCode === 2) {
       // Create app in registry
       try {
         await client.createApp({
@@ -132,6 +132,8 @@ export async function publishCommand(options: PublishOptions = {}): Promise<void
   // 4. Publish version
   const idempotencyKey = options.idempotencyKey || crypto.randomUUID();
   const expectedVersion = options.expectedVersion ? Number(options.expectedVersion) : undefined;
+  const artifactSha = crypto.createHash('sha256').update(rawManifest).digest('hex');
+  const artifactRef = `capsules/${appKey}/artifacts/${artifactSha.substring(0, 16)}.tar.gz`;
 
   let publishResponse: any;
   try {
@@ -139,8 +141,12 @@ export async function publishCommand(options: PublishOptions = {}): Promise<void
       appKey,
       {
         manifest,
-        description: options.description || 'Published via capsule CLI',
-        expected_version: expectedVersion,
+        artifact: {
+          ref: artifactRef,
+          sha256: artifactSha,
+        },
+        change_description: options.description || 'Published via capsule CLI',
+        expected_current_version: expectedVersion,
       },
       { idempotencyKey }
     );

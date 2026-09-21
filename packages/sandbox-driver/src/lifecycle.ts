@@ -194,6 +194,16 @@ export class CapsuleLifecycleManager {
   }
 
   /**
+   * Suspend a specific capsule by appKey.
+   */
+  async suspend(appKey: string): Promise<void> {
+    const instance = this.instances.get(appKey);
+    if (!instance) throw new Error(`No instance tracked for appKey: ${appKey}`);
+    await this.driver.suspend(instance.id);
+    instance.status = 'suspended';
+  }
+
+  /**
    * Resume a specific capsule by appKey.
    */
   async resume(appKey: string): Promise<void> {

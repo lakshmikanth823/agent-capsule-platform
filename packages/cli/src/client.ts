@@ -123,9 +123,12 @@ export class ApiClient {
     appIdOrKey: string,
     payload: {
       manifest: any;
+      artifact?: { ref: string; sha256?: string };
       bundle_tar_gz?: string;
       description?: string;
+      change_description?: string;
       expected_version?: number;
+      expected_current_version?: number;
     },
     options: { idempotencyKey?: string } = {}
   ): Promise<any> {
