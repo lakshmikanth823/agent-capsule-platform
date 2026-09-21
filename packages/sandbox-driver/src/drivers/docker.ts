@@ -56,12 +56,13 @@ export class DockerDevDriver implements SandboxDriver {
     const pidsLimit = spec.limits?.pidsLimit || 64;
     const networkMode = spec.networkMode || 'none';
 
-    // Ensure data directory and blobs directory exist on host
-    await fs.mkdir(spec.dataDir, { recursive: true });
-    await fs.mkdir(path.join(spec.dataDir, 'blobs'), { recursive: true });
+    // Ensure data directory exists on host if dataDir is specified
+    if (spec.dataDir) {
+      await fs.mkdir(spec.dataDir, { recursive: true });
+      await fs.mkdir(path.join(spec.dataDir, 'blobs'), { recursive: true });
+    }
 
     const normalizedAppDir = this.normalizePathForDocker(spec.bundlePath);
-    const normalizedDataDir = this.normalizePathForDocker(spec.dataDir);
 
     const dbMaxSizeMb =
       spec.manifest?.capabilities?.db?.max_size_mb ||
@@ -82,9 +83,17 @@ export class DockerDevDriver implements SandboxDriver {
       // 4. Temporary writable scratch spaces
       '--tmpfs', '/tmp:rw,noexec,nosuid,size=64m',
       '--tmpfs', '/run:rw,noexec,nosuid,size=16m',
-      // 5. Volume mounts (read-only app code, writable data for SQLite & blobs)
+      // 5. Volume mounts (read-only app code)
       '-v', `${normalizedAppDir}:/app:ro`,
-      '-v', `${normalizedDataDir}:/data:rw`,
+    ];
+
+    // Mount writable /data only if dataDir is provided (db capability declared)
+    if (spec.dataDir) {
+      const normalizedDataDir = this.normalizePathForDocker(spec.dataDir);
+      dockerArgs.push('-v', `${normalizedDataDir}:/data:rw`);
+    }
+
+    dockerArgs.push(
       // 6. Resource limits
       '--cpus', cpuLimit,
       '--memory', `${memoryMb}m`,
@@ -96,12 +105,17 @@ export class DockerDevDriver implements SandboxDriver {
       '-w', '/app',
       '-e', 'NODE_ENV=production',
       '-e', 'PORT=3000',
-      '-e', 'DATABASE_PATH=/data/app.sqlite',
-      '-e', 'CAPSULE_BLOB_DIR=/data/blobs',
       '-e', `CAPSULE_ID=${spec.capsuleId}`,
-      '-e', `APP_ID=${spec.appKey}`,
-      '-e', `DB_MAX_SIZE_MB=${dbMaxSizeMb}`,
-    ];
+      '-e', `APP_ID=${spec.appKey}`
+    );
+
+    if (spec.dataDir) {
+      dockerArgs.push(
+        '-e', 'DATABASE_PATH=/data/app.sqlite',
+        '-e', 'CAPSULE_BLOB_DIR=/data/blobs',
+        '-e', `DB_MAX_SIZE_MB=${dbMaxSizeMb}`
+      );
+    }
 
     if (process.env.CAPSULE_IDENTITY_SECRET) {
       dockerArgs.push('-e', `CAPSULE_IDENTITY_SECRET=${process.env.CAPSULE_IDENTITY_SECRET}`);

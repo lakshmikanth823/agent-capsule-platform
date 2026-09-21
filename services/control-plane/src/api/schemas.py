@@ -81,10 +81,10 @@ class VersionListResponse(BaseModel):
 class PublishOperationResponse(BaseModel):
     operation_id: uuid.UUID
     type: Literal["publish", "rollback"] = "publish"
-    status: Literal["queued", "running", "succeeded", "failed", "cancelled"]
+    status: Literal["queued", "running", "succeeded", "failed", "cancelled", "pending_approval"]
     app_id: uuid.UUID
     version_id: Optional[uuid.UUID] = None
-    errors: List[Dict[str, Any]] = []
+    errors: List[Any] = []
     created_at: datetime
     updated_at: datetime
 
@@ -123,3 +123,31 @@ class ErrorResponse(BaseModel):
     message: str
     request_id: Optional[str] = None
     details: Optional[Dict[str, Any]] = None
+
+
+class CapabilityApprovalResponse(BaseModel):
+    id: uuid.UUID
+    app_id: uuid.UUID
+    requested_version_id: Optional[uuid.UUID] = None
+    capability_key: str
+    previous_value: Optional[Any] = None
+    requested_value: Optional[Any] = None
+    status: str
+    requested_by_user_id: Optional[uuid.UUID] = None
+    approved_by_user_id: Optional[uuid.UUID] = None
+    requested_at: datetime
+    decided_at: Optional[datetime] = None
+
+
+class ApprovalsListResponse(BaseModel):
+    approvals: List[CapabilityApprovalResponse]
+    pending_count: int
+
+
+class ApprovalDecisionResponse(BaseModel):
+    approval_id: uuid.UUID
+    status: str
+    version_id: Optional[uuid.UUID] = None
+    version_status: Optional[str] = None
+    version_number: Optional[int] = None
+

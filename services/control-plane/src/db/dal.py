@@ -427,3 +427,68 @@ class AuditDAL:
             )
         )
         return result.scalar_one_or_none()
+
+
+class CapabilityApprovalDAL:
+    def __init__(self, session: AsyncSession):
+        self.session = session
+
+    async def create(
+        self,
+        app_id: uuid.UUID,
+        capability_key: str,
+        requested_version_id: Optional[uuid.UUID] = None,
+        previous_value: Optional[Dict[str, Any]] = None,
+        requested_value: Optional[Dict[str, Any]] = None,
+        requested_by_user_id: Optional[uuid.UUID] = None,
+    ) -> CapabilityApproval:
+        approval = CapabilityApproval(
+            app_id=app_id,
+            requested_version_id=requested_version_id,
+            capability_key=capability_key,
+            previous_value=previous_value,
+            requested_value=requested_value,
+            status="pending",
+            requested_by_user_id=requested_by_user_id,
+        )
+        self.session.add(approval)
+        await self.session.flush()
+        return approval
+
+    async def get_by_id(self, approval_id: uuid.UUID) -> Optional[CapabilityApproval]:
+        result = await self.session.execute(
+            select(CapabilityApproval).where(CapabilityApproval.id == approval_id)
+        )
+        return result.scalar_one_or_none()
+
+    async def list_for_app(
+        self, app_id: uuid.UUID, status: Optional[str] = None
+    ) -> List[CapabilityApproval]:
+        stmt = select(CapabilityApproval).where(CapabilityApproval.app_id == app_id)
+        if status:
+            stmt = stmt.where(CapabilityApproval.status == status)
+        stmt = stmt.order_by(CapabilityApproval.requested_at.desc())
+        result = await self.session.execute(stmt)
+        return list(result.scalars().all())
+
+    async def list_for_version(
+        self, version_id: uuid.UUID
+    ) -> List[CapabilityApproval]:
+        stmt = select(CapabilityApproval).where(
+            CapabilityApproval.requested_version_id == version_id
+        )
+        result = await self.session.execute(stmt)
+        return list(result.scalars().all())
+
+    async def decide(
+        self, approval_id: uuid.UUID, decision: str, decided_by_user_id: uuid.UUID
+    ) -> Optional[CapabilityApproval]:
+        approval = await self.get_by_id(approval_id)
+        if not approval:
+            return None
+        approval.status = decision
+        approval.approved_by_user_id = decided_by_user_id
+        approval.decided_at = datetime.utcnow()
+        await self.session.flush()
+        return approval
+

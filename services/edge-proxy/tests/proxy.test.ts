@@ -41,6 +41,9 @@ describe('Edge Proxy Service', () => {
       manifest: {
         id: 'leave-tracker',
         roles: ['employee', 'manager', 'hr'],
+        capabilities: {
+          identity: true,
+        },
       },
     });
 

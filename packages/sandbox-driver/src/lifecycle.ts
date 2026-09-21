@@ -101,16 +101,35 @@ export class CapsuleLifecycleManager {
         this.defaultLimits.timeoutSeconds,
     };
 
+    // Capability enforcement at sandbox layer:
+    // 1. Database capability: only assign dataDir if declared in capabilities
+    const hasDb = Boolean(params.manifest?.capabilities?.db);
+    const effectiveDataDir = hasDb ? path.resolve(dataDir) : '';
+
+    // 2. Egress capability: default deny network isolation unless declared
+    const hasEgress =
+      Array.isArray(params.manifest?.egress) && params.manifest.egress.length > 0;
+    const egressProxyUrl = process.env.EGRESS_PROXY_URL || 'http://127.0.0.1:19080';
+
+    const env: Record<string, string> = { ...(params.env || {}) };
+    if (hasEgress) {
+      env.HTTP_PROXY = egressProxyUrl;
+      env.HTTPS_PROXY = egressProxyUrl;
+      env.ALL_PROXY = egressProxyUrl;
+      env.http_proxy = egressProxyUrl;
+      env.https_proxy = egressProxyUrl;
+    }
+
     const spec: SandboxSpec = {
       capsuleId: params.capsuleId,
       versionId: params.versionId,
       appKey: params.appKey,
       bundlePath: path.resolve(params.bundlePath),
-      dataDir: path.resolve(dataDir),
+      dataDir: effectiveDataDir,
       manifest: params.manifest,
       limits,
-      env: params.env,
-      networkMode: 'none', // Default deny: no outbound network
+      env,
+      networkMode: hasEgress ? 'bridge' : 'none', // Default deny: no outbound network
       port: 3000,
     };
 

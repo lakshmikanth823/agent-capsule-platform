@@ -424,30 +424,34 @@ export function createEdgeProxyServer(options?: {
     try {
       const rawBody = await readRequestBody(req);
 
-      // Sign identity token using active key with key rotation support (kid)
-      const now = Math.floor(Date.now() / 1000);
-      const identityPayload = {
-        iss: 'platform',
-        aud: `capsule:${app.id}`,
-        sub: session.sub,
-        email: session.email,
-        org_id: session.org_id,
-        groups: session.groups || [],
-        roles: access.appRoles || session.app_roles || [],
-        iat: now,
-        exp: now + 300, // 5 minutes validity
-      };
-
-      const activeSecret =
-        config.signingKeys[config.activeKeyId] || Object.values(config.signingKeys)[0];
-      const signedIdentityToken = signJwt(identityPayload, activeSecret, config.activeKeyId);
-
       const forwardHeaders: Record<string, string> = {};
       for (const [k, v] of Object.entries(req.headers)) {
         if (v && typeof v === 'string') forwardHeaders[k] = v;
       }
-      // Inject signed identity context
-      forwardHeaders['x-capsule-identity'] = signedIdentityToken;
+
+      // Capability enforcement: only inject identity context if declared in manifest
+      if (app.manifest?.capabilities?.identity === true) {
+        // Sign identity token using active key with key rotation support (kid)
+        const now = Math.floor(Date.now() / 1000);
+        const identityPayload = {
+          iss: 'platform',
+          aud: `capsule:${app.id}`,
+          sub: session.sub,
+          email: session.email,
+          org_id: session.org_id,
+          groups: session.groups || [],
+          roles: access.appRoles || session.app_roles || [],
+          iat: now,
+          exp: now + 300, // 5 minutes validity
+        };
+
+        const activeSecret =
+          config.signingKeys[config.activeKeyId] || Object.values(config.signingKeys)[0];
+        const signedIdentityToken = signJwt(identityPayload, activeSecret, config.activeKeyId);
+
+        // Inject signed identity context
+        forwardHeaders['x-capsule-identity'] = signedIdentityToken;
+      }
 
       const forwardReq: ForwardRequest = {
         method: req.method || 'GET',

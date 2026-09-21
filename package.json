@@ -6,6 +6,7 @@
   "workspaces": [
     "packages/*",
     "services/edge-proxy",
+    "services/egress-proxy",
     "services/builder",
     "apps/*",
     "examples/*"

@@ -11,7 +11,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, s
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.session import get_db_session
-from db.dal import AppDAL, AppVersionDAL, AuditDAL
+from db.dal import AppDAL, AppVersionDAL, AuditDAL, CapabilityApprovalDAL
 from auth.dependencies import get_current_user
 from auth.models import AuthenticatedUser
 from manifest.validator import validate_manifest
@@ -25,6 +25,9 @@ from .schemas import (
     PublishOperationResponse,
     ValidateRequest,
     ValidationResultResponse,
+    CapabilityApprovalResponse,
+    ApprovalsListResponse,
+    ApprovalDecisionResponse,
 )
 
 router = APIRouter(tags=["Apps"])
@@ -46,6 +49,108 @@ def _format_app_response(app: Any) -> AppResponse:
         created_at=app.created_at,
         updated_at=app.updated_at,
     )
+
+
+def detect_capability_escalation(
+    old_manifest: Dict[str, Any], new_manifest: Dict[str, Any]
+) -> List[Dict[str, Any]]:
+    """
+    Detects if a new version adds or broadens any capabilities, egress, or limits
+    compared to the previous version (TRD Section 19, PRD Section 20).
+    """
+    escalations: List[Dict[str, Any]] = []
+
+    old_caps = old_manifest.get("capabilities") or {}
+    new_caps = new_manifest.get("capabilities") or {}
+
+    # 1. Capabilities checks: db, identity, files, ai
+    for cap_key in ["db", "identity", "files", "ai"]:
+        old_val = old_caps.get(cap_key)
+        new_val = new_caps.get(cap_key)
+        if not old_val and new_val:
+            escalations.append({
+                "capability_key": f"capabilities.{cap_key}",
+                "previous_value": old_val,
+                "requested_value": new_val,
+                "reason": f"New capability '{cap_key}' requested",
+            })
+
+    # 2. Connectors check
+    old_connectors = old_caps.get("connectors") or []
+    new_connectors = new_caps.get("connectors") or []
+
+    def _normalize_connector(c: Any) -> Dict[str, Any]:
+        if isinstance(c, str):
+            return {"name": c, "identity": "viewer"}
+        if isinstance(c, dict):
+            return {
+                "name": c.get("name") or c.get("id") or str(c),
+                "identity": c.get("identity") or c.get("acts_as") or "viewer",
+            }
+        return {"name": str(c), "identity": "viewer"}
+
+    old_conn_map = {c["name"]: c for c in [_normalize_connector(x) for x in old_connectors]}
+    new_conn_map = {c["name"]: c for c in [_normalize_connector(x) for x in new_connectors]}
+
+    for name, new_c in new_conn_map.items():
+        if name not in old_conn_map:
+            escalations.append({
+                "capability_key": f"capabilities.connectors.{name}",
+                "previous_value": None,
+                "requested_value": new_c,
+                "reason": f"New connector requested: {name}",
+            })
+        else:
+            old_c = old_conn_map[name]
+            if old_c.get("identity") != "service" and new_c.get("identity") == "service":
+                escalations.append({
+                    "capability_key": f"capabilities.connectors.{name}.identity",
+                    "previous_value": old_c,
+                    "requested_value": new_c,
+                    "reason": f"Connector '{name}' escalated to service identity",
+                })
+
+    # 3. Egress checks
+    old_egress = old_manifest.get("egress") or []
+    new_egress = new_manifest.get("egress") or []
+
+    def _get_egress_hosts(egress_list: List[Any]) -> set:
+        hosts = set()
+        for item in egress_list:
+            if isinstance(item, str):
+                hosts.add(item.lower())
+            elif isinstance(item, dict) and "host" in item:
+                hosts.add(item["host"].lower())
+        return hosts
+
+    old_hosts = _get_egress_hosts(old_egress)
+    new_hosts = _get_egress_hosts(new_egress)
+
+    for host in new_hosts:
+        if host not in old_hosts:
+            escalations.append({
+                "capability_key": f"egress:{host}",
+                "previous_value": list(old_hosts),
+                "requested_value": host,
+                "reason": f"New outbound egress domain requested: {host}",
+            })
+
+    # 4. Limits checks (memory_mb, request_timeout_s, db_max_mb)
+    old_limits = old_manifest.get("limits") or {}
+    new_limits = new_manifest.get("limits") or {}
+
+    for num_limit in ["memory_mb", "request_timeout_s", "db_max_mb"]:
+        old_v = old_limits.get(num_limit)
+        new_v = new_limits.get(num_limit)
+        if old_v is not None and new_v is not None and new_v > old_v:
+            escalations.append({
+                "capability_key": f"limits.{num_limit}",
+                "previous_value": old_v,
+                "requested_value": new_v,
+                "reason": f"Limit '{num_limit}' increased from {old_v} to {new_v}",
+            })
+
+    return escalations
 
 
 @router.post("/apps", response_model=AppResponse, status_code=status.HTTP_201_CREATED)
@@ -372,7 +477,20 @@ async def publish_app(
             detail=val_result,
         )
 
-    # 7. Create App Version and Baseline SQLite Snapshot
+    # 7. Check for Capability Escalation on Update
+    approval_dal = CapabilityApprovalDAL(db)
+    current_version = None
+    if app.current_version_id:
+        current_version = await version_dal.get_by_id(app.current_version_id)
+
+    old_manifest = current_version.manifest if current_version else (app.manifest or {})
+    effective_manifest = val_result.get("effective_manifest") or manifest
+
+    escalations = []
+    if current_version:
+        escalations = detect_capability_escalation(old_manifest, effective_manifest)
+
+    # 8. Create App Version and Baseline SQLite Snapshot
     versions = await version_dal.list_for_app(app.id)
     next_ver_num = len(versions) + 1
 
@@ -381,8 +499,69 @@ async def publish_app(
         await storage.put(snapshot_ref, b"")
 
     now_utc = datetime.utcnow()
-    effective_manifest = val_result.get("effective_manifest") or manifest
+    operation_id = uuid.uuid4()
 
+    if escalations:
+        # Escalation detected: create version in 'validated' status (held from publishing)
+        version = await version_dal.create(
+            app_id=app.id,
+            version_number=next_ver_num,
+            source_artifact_ref=artifact_ref,
+            build_artifact_ref=None,
+            manifest=effective_manifest,
+            db_snapshot_ref=snapshot_ref,
+            publisher_user_id=user.id,
+            publisher_agent=user.claims.get("agent_name"),
+            change_description=change_description,
+            status="validated",
+            published_at=None,
+        )
+
+        # Create CapabilityApproval records
+        for esc in escalations:
+            await approval_dal.create(
+                app_id=app.id,
+                requested_version_id=version.id,
+                capability_key=esc["capability_key"],
+                previous_value=esc.get("previous_value"),
+                requested_value=esc.get("requested_value"),
+                requested_by_user_id=user.id,
+            )
+
+        # Record Audit Event
+        await audit_dal.record_event(
+            action="app.capability_escalation_detected",
+            outcome="denied",
+            organization_id=user.organization_id,
+            app_id=app.id,
+            actor_user_id=user.id,
+            target_type="app_version",
+            target_id=version.id,
+            metadata={
+                "idempotency_key": idempotency_key,
+                "request_hash": request_hash,
+                "operation_id": str(operation_id),
+                "version_number": next_ver_num,
+                "escalations": escalations,
+            },
+        )
+        await db.commit()
+
+        return PublishOperationResponse(
+            operation_id=operation_id,
+            type="publish",
+            status="pending_approval",
+            app_id=app.id,
+            version_id=version.id,
+            errors=[
+                f"Capability escalation detected: {e['reason']}. Approval required from app owner."
+                for e in escalations
+            ],
+            created_at=now_utc,
+            updated_at=now_utc,
+        )
+
+    # No escalation: publish immediately
     version = await version_dal.create(
         app_id=app.id,
         version_number=next_ver_num,
@@ -397,7 +576,7 @@ async def publish_app(
         published_at=now_utc,
     )
 
-    # 8. Update App Current Version & Manifest
+    # Update App Current Version & Manifest
     await app_dal.set_current_version(
         app_id=app.id,
         version_id=version.id,
@@ -406,9 +585,7 @@ async def publish_app(
         status="active",
     )
 
-    operation_id = uuid.uuid4()
-
-    # 9. Record Audit Event
+    # Record Audit Event
     await audit_dal.record_event(
         action="app.publish",
         outcome="success",
@@ -596,4 +773,256 @@ async def get_app_logs(
         "app_key": app.app_key,
         "logs": logs[-tail:],
     }
+
+
+# ============================================================
+# Capability Approval Endpoints (TRD Section 19, PRD Section 20)
+# ============================================================
+
+@router.get("/apps/{app_id}/approvals", response_model=ApprovalsListResponse)
+async def list_approvals(
+    app_id: str,
+    status_filter: Optional[str] = Query(None, alias="status"),
+    user: AuthenticatedUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db_session),
+):
+    """
+    List pending or historical capability escalation approvals for an application.
+    """
+    app_dal = AppDAL(db)
+    approval_dal = CapabilityApprovalDAL(db)
+
+    app = await app_dal.get_by_id_or_key(user.organization_id, app_id)
+    if not app:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"code": "APP_NOT_FOUND", "message": f"App '{app_id}' not found."},
+        )
+
+    approvals = await approval_dal.list_for_app(app.id, status=status_filter)
+    pending_count = sum(1 for a in approvals if a.status == "pending")
+
+    return ApprovalsListResponse(
+        approvals=[
+            CapabilityApprovalResponse(
+                id=a.id,
+                app_id=a.app_id,
+                requested_version_id=a.requested_version_id,
+                capability_key=a.capability_key,
+                previous_value=a.previous_value,
+                requested_value=a.requested_value,
+                status=a.status,
+                requested_by_user_id=a.requested_by_user_id,
+                approved_by_user_id=a.approved_by_user_id,
+                requested_at=a.requested_at,
+                decided_at=a.decided_at,
+            )
+            for a in approvals
+        ],
+        pending_count=pending_count,
+    )
+
+
+@router.post(
+    "/apps/{app_id}/approvals/{approval_id}/approve",
+    response_model=ApprovalDecisionResponse,
+)
+async def approve_capability_escalation(
+    app_id: str,
+    approval_id: uuid.UUID,
+    user: AuthenticatedUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db_session),
+):
+    """
+    Approve capability escalation for an application version.
+    SECURITY INVARIANT: An agent's publish credential can NEVER approve its own escalation.
+    Only an authenticated Owner or Editor can approve.
+    """
+    # 1. Reject Publish Token Callers (Self-Approval Prohibition)
+    if user.token_type == "publish_token":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={
+                "code": "FORBIDDEN",
+                "message": "A publish credential can never approve its own capability escalation.",
+            },
+        )
+
+    # 2. Check Platform Role (Owner or Editor required)
+    if user.platform_role not in ("owner", "editor"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={
+                "code": "FORBIDDEN",
+                "message": "Only an app Owner or Editor can approve capability escalation.",
+            },
+        )
+
+    app_dal = AppDAL(db)
+    approval_dal = CapabilityApprovalDAL(db)
+    version_dal = AppVersionDAL(db)
+    audit_dal = AuditDAL(db)
+
+    app = await app_dal.get_by_id_or_key(user.organization_id, app_id)
+    if not app:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"code": "APP_NOT_FOUND", "message": f"App '{app_id}' not found."},
+        )
+
+    approval = await approval_dal.get_by_id(approval_id)
+    if not approval or approval.app_id != app.id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"code": "APPROVAL_NOT_FOUND", "message": "Approval record not found."},
+        )
+
+    if approval.status != "pending":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={"code": "ALREADY_DECIDED", "message": f"Approval is already '{approval.status}'."},
+        )
+
+    # 3. Approve the record
+    await approval_dal.decide(approval.id, "approved", user.id)
+
+    version_status = "validated"
+    version_number = None
+
+    # 4. Check if all approvals for this version are approved
+    if approval.requested_version_id:
+        version_approvals = await approval_dal.list_for_version(approval.requested_version_id)
+        all_approved = all(a.status == "approved" for a in version_approvals)
+
+        version = await version_dal.get_by_id(approval.requested_version_id)
+        if version:
+            version_number = version.version_number
+            if all_approved:
+                # Activate version!
+                now = datetime.utcnow()
+                version.status = "published"
+                version.published_at = now
+                version_status = "published"
+
+                await app_dal.set_current_version(
+                    app_id=app.id,
+                    version_id=version.id,
+                    published_at=now,
+                    manifest=version.manifest,
+                    status="active",
+                )
+
+                await audit_dal.record_event(
+                    action="app.capability_approved",
+                    outcome="success",
+                    organization_id=user.organization_id,
+                    app_id=app.id,
+                    actor_user_id=user.id,
+                    target_type="app_version",
+                    target_id=version.id,
+                    metadata={
+                        "approval_id": str(approval.id),
+                        "capability_key": approval.capability_key,
+                        "version_number": version.version_number,
+                    },
+                )
+
+    await db.commit()
+
+    return ApprovalDecisionResponse(
+        approval_id=approval.id,
+        status="approved",
+        version_id=approval.requested_version_id,
+        version_status=version_status,
+        version_number=version_number,
+    )
+
+
+@router.post(
+    "/apps/{app_id}/approvals/{approval_id}/reject",
+    response_model=ApprovalDecisionResponse,
+)
+async def reject_capability_escalation(
+    app_id: str,
+    approval_id: uuid.UUID,
+    user: AuthenticatedUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db_session),
+):
+    """
+    Reject capability escalation for an application version.
+    """
+    if user.token_type == "publish_token":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={
+                "code": "FORBIDDEN",
+                "message": "A publish credential can never decide capability escalation.",
+            },
+        )
+
+    if user.platform_role not in ("owner", "editor"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={
+                "code": "FORBIDDEN",
+                "message": "Only an app Owner or Editor can reject capability escalation.",
+            },
+        )
+
+    app_dal = AppDAL(db)
+    approval_dal = CapabilityApprovalDAL(db)
+    version_dal = AppVersionDAL(db)
+    audit_dal = AuditDAL(db)
+
+    app = await app_dal.get_by_id_or_key(user.organization_id, app_id)
+    if not app:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"code": "APP_NOT_FOUND", "message": f"App '{app_id}' not found."},
+        )
+
+    approval = await approval_dal.get_by_id(approval_id)
+    if not approval or approval.app_id != app.id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"code": "APPROVAL_NOT_FOUND", "message": "Approval record not found."},
+        )
+
+    if approval.status != "pending":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={"code": "ALREADY_DECIDED", "message": f"Approval is already '{approval.status}'."},
+        )
+
+    await approval_dal.decide(approval.id, "rejected", user.id)
+
+    version_number = None
+    if approval.requested_version_id:
+        version = await version_dal.get_by_id(approval.requested_version_id)
+        if version:
+            version_number = version.version_number
+
+    await audit_dal.record_event(
+        action="app.capability_rejected",
+        outcome="denied",
+        organization_id=user.organization_id,
+        app_id=app.id,
+        actor_user_id=user.id,
+        target_type="capability_approval",
+        target_id=approval.id,
+        metadata={
+            "approval_id": str(approval.id),
+            "capability_key": approval.capability_key,
+        },
+    )
+    await db.commit()
+
+    return ApprovalDecisionResponse(
+        approval_id=approval.id,
+        status="rejected",
+        version_id=approval.requested_version_id,
+        version_status="validated",
+        version_number=version_number,
+    )
+
 
