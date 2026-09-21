@@ -1,0 +1,29 @@
+apiVersion: capsule/v1alpha1
+
+id: leave-tracker
+name: Leave Tracker
+shape: web-app
+runtime: node22
+
+roles:
+  - employee
+  - manager
+  - hr
+
+capabilities:
+  db:
+    type: sqlite
+  identity: true
+
+egress: []
+
+sharing:
+  default: org
+
+limits:
+  cpu: small
+  memory_mb: 256
+  request_timeout_s: 30
+  db_max_mb: 500
+  blob_max_mb: 200
+  max_active_instances: 1

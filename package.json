@@ -1,0 +1,32 @@
+{
+  "name": "capsule-platform",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Secure infrastructure platform for agent-built small software",
+  "workspaces": [
+    "packages/*",
+    "services/edge-proxy",
+    "services/builder",
+    "apps/*",
+    "examples/*"
+  ],
+  "scripts": {
+    "build": "npm run --workspaces --if-present build",
+    "test": "npm run test:ts && npm run test:py",
+    "test:ts": "vitest run",
+    "test:py": "python -m pytest services/control-plane/tests",
+    "lint": "npm run --workspaces --if-present lint",
+    "format": "prettier --write \"**/*.{ts,js,json,md,yaml,yml}\"",
+    "typecheck": "npm run --workspaces --if-present typecheck"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "prettier": "^3.3.0",
+    "typescript": "^5.5.0",
+    "vitest": "^2.0.0"
+  },
+  "engines": {
+    "node": ">=22.0.0",
+    "npm": ">=10.0.0"
+  }
+}
