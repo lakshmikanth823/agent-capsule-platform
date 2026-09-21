@@ -17,13 +17,13 @@ src_dir = Path(__file__).resolve().parent.parent
 if str(src_dir) not in sys.path:
     sys.path.insert(0, str(src_dir))
 
-from db.session import get_db_session
+from db.session import db_context
 from db.dal import OrganizationDAL, UserDAL, AppDAL, AppVersionDAL, AppShareDAL, AuditDAL
 
 
 async def seed_database():
     print("[*] Seeding database...")
-    async with get_db_session() as session:
+    async with db_context() as session:
         org_dal = OrganizationDAL(session)
         user_dal = UserDAL(session)
         app_dal = AppDAL(session)
@@ -56,8 +56,11 @@ async def seed_database():
                 identity_issuer="https://accounts.google.com",
                 status="active",
             )
-            await user_dal.add_to_org(org.id, alice.id, platform_role="owner")
             print(f"  + Created owner user: {alice.email} ({alice.id})")
+        alice_members = await user_dal.get_org_members(org.id)
+        if not any(m.user_id == alice.id for m in alice_members):
+            await user_dal.add_to_org(org.id, alice.id, platform_role="owner")
+            print(f"  + Added owner user to org: {alice.email} ({alice.id})")
 
         bob = await user_dal.get_by_email("bob@example.com")
         if not bob:
@@ -68,8 +71,11 @@ async def seed_database():
                 identity_issuer="https://accounts.google.com",
                 status="active",
             )
-            await user_dal.add_to_org(org.id, bob.id, platform_role="user")
             print(f"  + Created colleague user: {bob.email} ({bob.id})")
+        bob_members = await user_dal.get_org_members(org.id)
+        if not any(m.user_id == bob.id for m in bob_members):
+            await user_dal.add_to_org(org.id, bob.id, platform_role="user")
+            print(f"  + Added colleague user to org: {bob.email} ({bob.id})")
 
         # 3. Sample App: leave-tracker
         app = await app_dal.get_by_key(org.id, "leave-tracker")

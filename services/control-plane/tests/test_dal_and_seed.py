@@ -10,7 +10,7 @@ src_dir = Path(__file__).resolve().parent.parent / "src"
 if str(src_dir) not in sys.path:
     sys.path.insert(0, str(src_dir))
 
-from db.session import get_db_session
+from db.session import db_context
 from db.seed import seed_database
 from db.dal import OrganizationDAL, UserDAL, AppDAL, AppVersionDAL, AppShareDAL, AuditDAL
 
@@ -21,7 +21,7 @@ async def test_seed_loading_and_dal_queries():
     await seed_database()
 
     # 2. Query seeded data through DAL
-    async with get_db_session() as session:
+    async with db_context() as session:
         org_dal = OrganizationDAL(session)
         user_dal = UserDAL(session)
         app_dal = AppDAL(session)

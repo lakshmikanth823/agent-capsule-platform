@@ -15,7 +15,9 @@ dependencies = [
     "asyncpg>=0.29.0",
     "alembic>=1.13.0",
     "jsonschema>=4.22.0",
-    "pyjwt>=2.8.0"
+    "pyjwt>=2.8.0",
+    "python-multipart>=0.0.9",
+    "pyyaml>=6.0"
 ]
 
 [project.optional-dependencies]
@@ -28,3 +30,5 @@ test = [
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+pythonpath = ["src"]
+

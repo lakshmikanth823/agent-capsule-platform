@@ -45,9 +45,8 @@ sync_engine = create_engine(
 )
 
 
-@asynccontextmanager
 async def get_db_session() -> AsyncGenerator[AsyncSession, None]:
-    """Async context manager providing a transactional database session."""
+    """Async generator providing a transactional database session for FastAPI."""
     session = AsyncSessionLocal()
     try:
         yield session
@@ -57,3 +56,18 @@ async def get_db_session() -> AsyncGenerator[AsyncSession, None]:
         raise
     finally:
         await session.close()
+
+
+@asynccontextmanager
+async def db_context() -> AsyncGenerator[AsyncSession, None]:
+    """Async context manager providing a transactional database session for scripts/tests."""
+    session = AsyncSessionLocal()
+    try:
+        yield session
+        await session.commit()
+    except Exception:
+        await session.rollback()
+        raise
+    finally:
+        await session.close()
+

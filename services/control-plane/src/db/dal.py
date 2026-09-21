@@ -172,14 +172,39 @@ class AppDAL:
         )
         return list(result.scalars().all())
 
-    async def set_current_version(self, app_id: uuid.UUID, version_id: uuid.UUID, published_at: Optional[datetime] = None):
+    async def get_by_id_or_key(
+        self, organization_id: uuid.UUID, app_id_or_key: str
+    ) -> Optional[App]:
+        try:
+            val_uuid = uuid.UUID(app_id_or_key)
+            app = await self.get_by_id(val_uuid)
+            if app and app.organization_id == organization_id:
+                return app
+        except ValueError:
+            pass
+        return await self.get_by_key(organization_id, app_id_or_key)
+
+    async def set_current_version(
+        self,
+        app_id: uuid.UUID,
+        version_id: uuid.UUID,
+        published_at: Optional[datetime] = None,
+        manifest: Optional[Dict[str, Any]] = None,
+        status: Optional[str] = "active",
+    ):
+        values: Dict[str, Any] = {
+            "current_version_id": version_id,
+            "published_at": published_at or func.now(),
+        }
+        if manifest is not None:
+            values["manifest"] = manifest
+        if status is not None:
+            values["status"] = status
+
         await self.session.execute(
             update(App)
             .where(App.id == app_id)
-            .values(
-                current_version_id=version_id,
-                published_at=published_at or func.now(),
-            )
+            .values(**values)
         )
 
 
@@ -349,3 +374,20 @@ class AuditDAL:
         query = query.order_by(AuditEvent.occurred_at.desc()).limit(limit)
         result = await self.session.execute(query)
         return list(result.scalars().all())
+
+    async def get_by_idempotency_key(self, idempotency_key: str) -> Optional[AuditEvent]:
+        # JSONB access in SQLAlchemy: AuditEvent.metadata_['idempotency_key'].astext
+        result = await self.session.execute(
+            select(AuditEvent).where(
+                AuditEvent.metadata_["idempotency_key"].as_string() == idempotency_key
+            )
+        )
+        return result.scalar_one_or_none()
+
+    async def get_by_operation_id(self, operation_id: str) -> Optional[AuditEvent]:
+        result = await self.session.execute(
+            select(AuditEvent).where(
+                AuditEvent.metadata_["operation_id"].as_string() == operation_id
+            )
+        )
+        return result.scalar_one_or_none()

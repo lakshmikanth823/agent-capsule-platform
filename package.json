@@ -20,7 +20,8 @@
     "typecheck": "npm run --workspaces --if-present typecheck",
     "db:migrate": "powershell -Command \"if (Test-Path .venv/Scripts/python.exe) { .venv/Scripts/python.exe -m alembic -c services/control-plane/alembic.ini upgrade head } else { python -m alembic -c services/control-plane/alembic.ini upgrade head }\"",
     "db:seed": "powershell -Command \"if (Test-Path .venv/Scripts/python.exe) { .venv/Scripts/python.exe services/control-plane/src/db/seed.py } else { python services/control-plane/src/db/seed.py }\"",
-    "db:reset": "powershell -Command \"if (Test-Path .venv/Scripts/python.exe) { .venv/Scripts/python.exe services/control-plane/src/db/reset.py } else { python services/control-plane/src/db/reset.py }\""
+    "db:reset": "powershell -Command \"if (Test-Path .venv/Scripts/python.exe) { .venv/Scripts/python.exe services/control-plane/src/db/reset.py } else { python services/control-plane/src/db/reset.py }\"",
+    "control-plane:dev": "powershell -Command \"if (Test-Path .venv/Scripts/python.exe) { .venv/Scripts/python.exe -m uvicorn --app-dir services/control-plane/src main:app --port 8000 --reload } else { uvicorn --app-dir services/control-plane/src main:app --port 8000 --reload }\""
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
