@@ -271,6 +271,13 @@ class AppVersionDAL:
         )
         return list(result.scalars().all())
 
+    async def set_status(self, version_id: uuid.UUID, status: str) -> Optional[AppVersion]:
+        version = await self.get_by_id(version_id)
+        if version:
+            version.status = status
+            await self.session.flush()
+        return version
+
 
 class AppShareDAL:
     def __init__(self, session: AsyncSession):

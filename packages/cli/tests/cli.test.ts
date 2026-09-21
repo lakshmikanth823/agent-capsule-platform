@@ -37,6 +37,7 @@ describe('Capsule CLI Package', () => {
     expect(commandNames).toContain('status');
     expect(commandNames).toContain('logs');
     expect(commandNames).toContain('versions');
+    expect(commandNames).toContain('rollback');
   });
 
   it('should scaffold complete starter project with capsule init', async () => {

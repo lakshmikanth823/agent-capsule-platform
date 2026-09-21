@@ -13,6 +13,7 @@ import { unshareCommand } from './commands/unshare.js';
 import { statusCommand } from './commands/status.js';
 import { logsCommand } from './commands/logs.js';
 import { versionsCommand } from './commands/versions.js';
+import { rollbackCommand } from './commands/rollback.js';
 
 export function createProgram(): Command {
   const program = new Command();
@@ -130,6 +131,18 @@ export function createProgram(): Command {
     .option('--app <appKey>', 'Target capsule ID or key')
     .option('--json', 'Output machine-readable JSON')
     .action((opts) => versionsCommand(opts));
+
+  // 11. rollback
+  program
+    .command('rollback')
+    .description('Roll back to a previous version')
+    .requiredOption('--version <n>', 'Target version number', (v) => parseInt(v, 10))
+    .option('--mode <mode>', 'Rollback mode: code-only or code-and-data (default: code-only)', 'code-only')
+    .option('--confirm-data-restore', 'Confirm destructive data restore')
+    .option('--reason <msg>', 'Reason for rollback')
+    .option('--app <appKey>', 'Target capsule ID or key')
+    .option('--json', 'Output machine-readable JSON')
+    .action((opts) => rollbackCommand(opts));
 
   return program;
 }

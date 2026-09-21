@@ -3,15 +3,20 @@ App and Version management endpoints matching docs/api-cli-spec/openapi.yaml.
 """
 import hashlib
 import json
+import os
+import shutil
+import sqlite3
+import tempfile
 import uuid
-from datetime import datetime
-from typing import Any, Dict, List, Optional
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.session import get_db_session
-from db.dal import AppDAL, AppVersionDAL, AuditDAL, CapabilityApprovalDAL
+from db.dal import AppDAL, AppVersionDAL, AuditDAL, CapabilityApprovalDAL, UserDAL
 from auth.dependencies import get_current_user
 from auth.models import AuthenticatedUser
 from manifest.validator import validate_manifest
@@ -28,6 +33,9 @@ from .schemas import (
     CapabilityApprovalResponse,
     ApprovalsListResponse,
     ApprovalDecisionResponse,
+    RollbackRequest,
+    DataLossWarning,
+    RollbackOperationResponse,
 )
 
 router = APIRouter(tags=["Apps"])
@@ -49,6 +57,157 @@ def _format_app_response(app: Any) -> AppResponse:
         created_at=app.created_at,
         updated_at=app.updated_at,
     )
+
+
+def get_capsule_db_path(app_id: uuid.UUID, app_key: str) -> Path:
+    base_data_dir = Path(os.environ.get("CAPSULES_DATA_DIR", "data/capsules")).resolve()
+    path_by_id = base_data_dir / str(app_id) / "data" / "app.sqlite"
+    path_by_key = base_data_dir / app_key / "data" / "app.sqlite"
+    if path_by_id.exists():
+        return path_by_id
+    if path_by_key.exists():
+        return path_by_key
+    return path_by_id
+
+
+def _get_sqlite_conn(db_bytes_or_path: Union[bytes, Path, str]) -> Tuple[sqlite3.Connection, Optional[Path]]:
+    if isinstance(db_bytes_or_path, (bytes, bytearray)):
+        tmp = tempfile.NamedTemporaryFile(suffix=".sqlite", delete=False)
+        tmp.write(db_bytes_or_path)
+        tmp.close()
+        tmp_path = Path(tmp.name)
+        conn = sqlite3.connect(str(tmp_path))
+        return conn, tmp_path
+    else:
+        conn = sqlite3.connect(str(db_bytes_or_path))
+        return conn, None
+
+
+def inspect_sqlite_schema(db_bytes_or_path: Union[bytes, Path, str]) -> Dict[str, Any]:
+    """
+    Inspects tables and column definitions of a SQLite database.
+    """
+    conn, tmp_path = _get_sqlite_conn(db_bytes_or_path)
+    try:
+        cursor = conn.cursor()
+        cursor.execute("SELECT name, sql FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%';")
+        tables = cursor.fetchall()
+        schema: Dict[str, Any] = {}
+        for table_name, create_sql in tables:
+            cursor.execute(f"PRAGMA table_info({table_name});")
+            cols = cursor.fetchall()
+            columns: Dict[str, Any] = {}
+            for row in cols:
+                # cid, name, type, notnull, dflt_value, pk
+                col_name = row[1]
+                col_type = (row[2] or "TEXT").upper()
+                notnull = bool(row[3])
+                dflt_val = row[4]
+                pk = bool(row[5])
+                columns[col_name] = {
+                    "type": col_type,
+                    "notnull": notnull,
+                    "default": dflt_val,
+                    "pk": pk,
+                }
+            schema[table_name] = {
+                "sql": create_sql,
+                "columns": columns,
+            }
+        return schema
+    except Exception:
+        return {}
+    finally:
+        conn.close()
+        if tmp_path and tmp_path.exists():
+            tmp_path.unlink()
+
+
+def count_sqlite_records(db_bytes_or_path: Union[bytes, Path, str]) -> int:
+    """
+    Counts total rows across all non-system tables in a SQLite database.
+    """
+    conn, tmp_path = _get_sqlite_conn(db_bytes_or_path)
+    try:
+        cursor = conn.cursor()
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%';")
+        tables = [row[0] for row in cursor.fetchall()]
+        total = 0
+        for t in tables:
+            try:
+                cursor.execute(f"SELECT COUNT(*) FROM {t};")
+                total += cursor.fetchone()[0]
+            except Exception:
+                pass
+        return total
+    except Exception:
+        return 0
+    finally:
+        conn.close()
+        if tmp_path and tmp_path.exists():
+            tmp_path.unlink()
+
+
+def check_schema_compatibility(
+    target_schema: Dict[str, Any], current_schema: Dict[str, Any]
+) -> Tuple[bool, Optional[str]]:
+    """
+    Checks if target schema is compatible with current schema for code-only rollback.
+    Code of target version expects all tables and columns defined in target_schema
+    to exist in current_schema.
+    """
+    for table_name, table_info in target_schema.items():
+        if table_name not in current_schema:
+            return False, f"Table '{table_name}' required by target version does not exist in current database"
+        current_cols = current_schema[table_name]["columns"]
+        for col_name, col_info in table_info["columns"].items():
+            if col_name not in current_cols:
+                return (
+                    False,
+                    f"Column '{col_name}' of table '{table_name}' required by target version does not exist in current database",
+                )
+    return True, None
+
+
+async def take_sqlite_snapshot(source_path: Path, storage: Any, target_ref: str) -> Tuple[str, int]:
+    """
+    Takes a database snapshot before deploy or rollback.
+    If source_path exists, performs safe SQLite backup and stores in object storage.
+    If source_path does not exist, creates a clean baseline SQLite file.
+    Returns (target_ref, records_count).
+    """
+    if source_path.exists():
+        with tempfile.NamedTemporaryFile(suffix=".sqlite", delete=False) as tmp:
+            tmp_path = Path(tmp.name)
+        try:
+            src_conn = sqlite3.connect(str(source_path))
+            dst_conn = sqlite3.connect(str(tmp_path))
+            src_conn.backup(dst_conn)
+            src_conn.close()
+            dst_conn.close()
+            data = tmp_path.read_bytes()
+            records = count_sqlite_records(tmp_path)
+        except Exception:
+            data = source_path.read_bytes()
+            records = count_sqlite_records(data)
+        finally:
+            if tmp_path.exists():
+                tmp_path.unlink()
+    else:
+        with tempfile.NamedTemporaryFile(suffix=".sqlite", delete=False) as tmp:
+            tmp_path = Path(tmp.name)
+        try:
+            conn = sqlite3.connect(str(tmp_path))
+            conn.execute("PRAGMA user_version = 0;")
+            conn.close()
+            data = tmp_path.read_bytes()
+            records = 0
+        finally:
+            if tmp_path.exists():
+                tmp_path.unlink()
+
+    await storage.put(target_ref, data)
+    return target_ref, records
 
 
 def detect_capability_escalation(
@@ -490,13 +649,13 @@ async def publish_app(
     if current_version:
         escalations = detect_capability_escalation(old_manifest, effective_manifest)
 
-    # 8. Create App Version and Baseline SQLite Snapshot
+    # 8. Create App Version and Pre-Deploy Database Snapshot
     versions = await version_dal.list_for_app(app.id)
     next_ver_num = len(versions) + 1
 
-    snapshot_ref = f"capsules/{app.id}/snapshots/v{next_ver_num}_baseline.sqlite"
-    if not await storage.exists(snapshot_ref):
-        await storage.put(snapshot_ref, b"")
+    live_db_path = get_capsule_db_path(app.id, app.app_key)
+    snapshot_ref = f"capsules/{app.id}/snapshots/v{next_ver_num}_snapshot.sqlite"
+    await take_sqlite_snapshot(live_db_path, storage, snapshot_ref)
 
     now_utc = datetime.utcnow()
     operation_id = uuid.uuid4()
@@ -635,8 +794,23 @@ async def list_versions(
         )
 
     versions = await version_dal.list_for_app(app.id)
-    return VersionListResponse(
-        items=[
+    user_dal = UserDAL(db)
+    publisher_ids = {v.publisher_user_id for v in versions if v.publisher_user_id}
+    users_map = {}
+    for pid in publisher_ids:
+        u = await user_dal.get_by_id(pid)
+        if u:
+            users_map[pid] = u.display_name or u.email
+
+    items = []
+    for v in versions:
+        pub_name = None
+        if v.publisher_user_id and v.publisher_user_id in users_map:
+            pub_name = users_map[v.publisher_user_id]
+        elif v.publisher_agent:
+            pub_name = v.publisher_agent
+
+        items.append(
             AppVersionResponse(
                 id=v.id,
                 app_id=v.app_id,
@@ -648,14 +822,13 @@ async def list_versions(
                 db_snapshot_ref=v.db_snapshot_ref,
                 publisher_user_id=v.publisher_user_id,
                 publisher_agent=v.publisher_agent,
+                publisher_name=pub_name,
                 change_description=v.change_description,
                 published_at=v.published_at,
                 created_at=v.created_at,
             )
-            for v in versions
-        ],
-        next_cursor=None,
-    )
+        )
+    return VersionListResponse(items=items, next_cursor=None)
 
 
 @router.get("/apps/{app_id}/versions/{version_id}", response_model=AppVersionResponse)
@@ -685,6 +858,15 @@ async def get_version(
             detail={"code": "VERSION_NOT_FOUND", "message": f"Version '{version_id}' not found."},
         )
 
+    user_dal = UserDAL(db)
+    pub_name = None
+    if version.publisher_user_id:
+        u = await user_dal.get_by_id(version.publisher_user_id)
+        if u:
+            pub_name = u.display_name or u.email
+    elif version.publisher_agent:
+        pub_name = version.publisher_agent
+
     return AppVersionResponse(
         id=version.id,
         app_id=version.app_id,
@@ -696,9 +878,235 @@ async def get_version(
         db_snapshot_ref=version.db_snapshot_ref,
         publisher_user_id=version.publisher_user_id,
         publisher_agent=version.publisher_agent,
+        publisher_name=pub_name,
         change_description=version.change_description,
         published_at=version.published_at,
         created_at=version.created_at,
+    )
+
+
+@router.post(
+    "/apps/{app_id}/rollback",
+    response_model=RollbackOperationResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+)
+async def rollback_app(
+    app_id: str,
+    request: RollbackRequest,
+    idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key"),
+    user: AuthenticatedUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db_session),
+):
+    """
+    Roll back an application to a previous version.
+    Supports code-only (default) and code-plus-data restore.
+    Takes a fresh recovery snapshot immediately before rollback.
+    """
+    # 1. Authorization: publish tokens cannot perform rollback
+    if user.token_type == "publish_token" or user.publish_app_id is not None or user.claims.get("sub", "").startswith("app-pub-"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={"code": "FORBIDDEN", "message": "Publish tokens cannot perform rollback operations."},
+        )
+
+    # 2. Authorization: owner or editor required
+    if user.platform_role not in ("owner", "editor"):
+        user_dal = UserDAL(db)
+        members = await user_dal.get_org_members(user.organization_id)
+        user_member = next((m for m in members if m.user_id == user.id), None)
+        if not user_member or user_member.platform_role not in ("owner", "editor"):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail={"code": "FORBIDDEN", "message": "Only owners and editors can perform rollback operations."},
+            )
+
+    app_dal = AppDAL(db)
+    version_dal = AppVersionDAL(db)
+    audit_dal = AuditDAL(db)
+    storage = get_storage_driver()
+
+    # 3. Resolve App
+    app = await app_dal.get_by_id_or_key(user.organization_id, app_id)
+    if not app:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"code": "APP_NOT_FOUND", "message": f"App '{app_id}' not found."},
+        )
+
+    # 4. Resolve Target Version
+    target_version = None
+    if request.target_version_id:
+        target_version = await version_dal.get_by_id(request.target_version_id)
+    elif request.target_version_number is not None:
+        target_version = await version_dal.get_by_number(app.id, request.target_version_number)
+    else:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"code": "INVALID_REQUEST", "message": "Either target_version_id or target_version_number is required."},
+        )
+
+    if not target_version or target_version.app_id != app.id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"code": "VERSION_NOT_FOUND", "message": "Target version not found."},
+        )
+
+    if target_version.id == app.current_version_id and request.mode == "code_only":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"code": "ALREADY_ACTIVE", "message": f"Version {target_version.version_number} code is already active."},
+        )
+
+    # 5. Check Target Snapshot & Live Database
+    target_snapshot_ref = target_version.db_snapshot_ref
+    target_bytes = b""
+    if await storage.exists(target_snapshot_ref):
+        target_bytes = await storage.get(target_snapshot_ref)
+
+    live_db_path = get_capsule_db_path(app.id, app.app_key)
+
+    # 6. Mode: code_only schema compatibility check
+    if request.mode == "code_only":
+        if live_db_path.exists() and target_bytes:
+            target_schema = inspect_sqlite_schema(target_bytes)
+            current_schema = inspect_sqlite_schema(live_db_path)
+            compatible, reason = check_schema_compatibility(target_schema, current_schema)
+            if not compatible:
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail={
+                        "code": "ROLLBACK_INCOMPATIBLE",
+                        "message": (
+                            f"Target version {target_version.version_number} schema is incompatible with current database: {reason}. "
+                            "Use code-and-data restore mode with explicit confirmation."
+                        ),
+                        "target_version": target_version.version_number,
+                        "reason": reason,
+                    },
+                )
+
+    # 7. Mode: code_and_data confirmation & warning check
+    elif request.mode == "code_and_data":
+        if not request.confirm_data_restore:
+            target_records = count_sqlite_records(target_bytes) if target_bytes else 0
+            current_records = count_sqlite_records(live_db_path) if live_db_path.exists() else 0
+            snap_time = target_version.published_at or target_version.created_at
+            now_dt = datetime.now(timezone.utc)
+            if snap_time and snap_time.tzinfo is None:
+                snap_time = snap_time.replace(tzinfo=timezone.utc)
+            time_window = int(abs((now_dt - snap_time).total_seconds())) if snap_time else 0
+            records_lost = max(0, current_records - target_records)
+
+            warning = DataLossWarning(
+                target_version=target_version.version_number,
+                snapshot_ref=target_snapshot_ref,
+                snapshot_time=snap_time,
+                time_window_seconds=time_window,
+                current_records=current_records,
+                target_records=target_records,
+                estimated_records_lost=records_lost,
+                recovery_snapshot_available=True,
+                message=(
+                    f"WARNING: Restoring database snapshot from version {target_version.version_number} "
+                    f"will overwrite current application data. {current_records} current records present. "
+                    f"Confirm data restore to proceed."
+                ),
+            )
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail={
+                    "code": "CONFIRMATION_REQUIRED",
+                    "message": warning.message,
+                    "data_loss_warning": warning.model_dump(mode="json"),
+                },
+            )
+
+    # 8. Take Fresh Pre-Rollback Recovery Snapshot (so rollback can be undone)
+    versions = await version_dal.list_for_app(app.id)
+    next_ver_num = len(versions) + 1
+    recovery_snapshot_ref = f"capsules/{app.id}/snapshots/pre_rollback_v{next_ver_num}.sqlite"
+    await take_sqlite_snapshot(live_db_path, storage, recovery_snapshot_ref)
+
+    # 9. Perform Data Restore if requested
+    data_restored = False
+    if request.mode == "code_and_data" and target_bytes:
+        live_db_path.parent.mkdir(parents=True, exist_ok=True)
+        live_db_path.write_bytes(target_bytes)
+        wal_file = live_db_path.with_name(live_db_path.name + "-wal")
+        shm_file = live_db_path.with_name(live_db_path.name + "-shm")
+        if wal_file.exists():
+            wal_file.unlink()
+        if shm_file.exists():
+            shm_file.unlink()
+        data_restored = True
+
+    # 10. Create New Immutable Rollback Version in app_versions
+    now_utc = datetime.utcnow()
+    operation_id = uuid.uuid4()
+    change_desc = f"Rollback to v{target_version.version_number} ({request.mode})"
+    if request.reason:
+        change_desc += f": {request.reason}"
+
+    new_version = await version_dal.create(
+        app_id=app.id,
+        version_number=next_ver_num,
+        source_artifact_ref=target_version.source_artifact_ref,
+        build_artifact_ref=target_version.build_artifact_ref,
+        manifest=target_version.manifest,
+        db_snapshot_ref=recovery_snapshot_ref,
+        publisher_user_id=user.id,
+        publisher_agent=user.claims.get("agent_name"),
+        change_description=change_desc,
+        status="published",
+        published_at=now_utc,
+    )
+
+    # 11. Mark Previous Version as rolled_back and Update Current Version
+    if app.current_version_id:
+        await version_dal.set_status(app.current_version_id, "rolled_back")
+
+    await app_dal.set_current_version(
+        app_id=app.id,
+        version_id=new_version.id,
+        published_at=now_utc,
+        manifest=target_version.manifest,
+        status="active",
+    )
+
+    # 12. Record Audit Event
+    await audit_dal.record_event(
+        action="app.rollback",
+        outcome="success",
+        organization_id=user.organization_id,
+        app_id=app.id,
+        actor_user_id=user.id,
+        target_type="app_version",
+        target_id=new_version.id,
+        metadata={
+            "idempotency_key": idempotency_key,
+            "operation_id": str(operation_id),
+            "target_version_number": target_version.version_number,
+            "new_version_number": next_ver_num,
+            "mode": request.mode,
+            "recovery_snapshot_ref": recovery_snapshot_ref,
+            "data_restored": data_restored,
+            "reason": request.reason,
+        },
+    )
+    await db.commit()
+
+    return RollbackOperationResponse(
+        operation_id=operation_id,
+        type="rollback",
+        status="succeeded",
+        app_id=app.id,
+        version_id=new_version.id,
+        version_number=next_ver_num,
+        target_version_number=target_version.version_number,
+        mode=request.mode,
+        recovery_snapshot_ref=recovery_snapshot_ref,
+        data_restored=data_restored,
+        created_at=now_utc,
     )
 
 

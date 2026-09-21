@@ -170,4 +170,23 @@ export class ApiClient {
       method: 'DELETE',
     });
   }
+
+  // Rollback
+  async rollback(
+    appIdOrKey: string,
+    payload: {
+      target_version_number?: number;
+      target_version_id?: string;
+      mode?: 'code_only' | 'code_and_data';
+      confirm_data_restore?: boolean;
+      reason?: string;
+    },
+    options: { idempotencyKey?: string } = {}
+  ): Promise<any> {
+    return this.request(`/v1/apps/${appIdOrKey}/rollback`, {
+      method: 'POST',
+      body: payload,
+      idempotencyKey: options.idempotencyKey,
+    });
+  }
 }

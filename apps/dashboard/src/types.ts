@@ -60,10 +60,11 @@ export interface AppVersion {
   build_artifact_ref?: string;
   manifest: Record<string, any>;
   db_snapshot_ref?: string;
-  publisher_user_id: string;
+  publisher_user_id?: string;
   publisher_agent?: string;
+  publisher_name?: string;
   change_description?: string;
-  published_at: string;
+  published_at?: string;
   created_at: string;
 }
 

@@ -56,13 +56,14 @@ export async function versionsCommand(options: VersionsOptions = {}): Promise<vo
           return;
         }
 
-        console.log(`\x1b[1mVERSION  STATUS     PUBLISHED              DESCRIPTION\x1b[0m`);
+        console.log(`\x1b[1mVERSION  STATUS      PUBLISHED               PUBLISHER        DESCRIPTION\x1b[0m`);
         for (const v of versions) {
           const vNum = String(v.version_number).padEnd(8);
-          const status = String(v.status).padEnd(10);
-          const date = new Date(v.published_at || v.created_at).toISOString().replace('T', ' ').substring(0, 19).padEnd(22);
-          const desc = v.description || '(none)';
-          console.log(`${vNum} ${status} ${date} ${desc}`);
+          const status = String(v.status).padEnd(11);
+          const date = new Date(v.published_at || v.created_at).toISOString().replace('T', ' ').substring(0, 19).padEnd(23);
+          const pub = String(v.publisher_name || v.publisher_agent || 'unknown').padEnd(16);
+          const desc = v.change_description || v.description || '(none)';
+          console.log(`${vNum} ${status} ${date} ${pub} ${desc}`);
         }
       }
     );

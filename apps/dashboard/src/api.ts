@@ -99,4 +99,17 @@ export const api = {
     const query = appId ? `?app_id=${appId}` : '';
     return apiFetch<AuditEvent[]>(`/audit/events${query}`);
   },
+
+  async rollbackApp(appId: string, data: {
+    target_version_number?: number;
+    target_version_id?: string;
+    mode?: 'code_only' | 'code_and_data';
+    confirm_data_restore?: boolean;
+    reason?: string;
+  }): Promise<any> {
+    return apiFetch(`/apps/${appId}/rollback`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
 };

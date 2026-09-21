@@ -66,6 +66,7 @@ class AppVersionResponse(BaseModel):
     db_snapshot_ref: str
     publisher_user_id: Optional[uuid.UUID] = None
     publisher_agent: Optional[str] = None
+    publisher_name: Optional[str] = None
     change_description: Optional[str] = None
     published_at: Optional[datetime] = None
     created_at: datetime
@@ -87,6 +88,41 @@ class PublishOperationResponse(BaseModel):
     errors: List[Any] = []
     created_at: datetime
     updated_at: datetime
+
+
+class RollbackRequest(BaseModel):
+    target_version_id: Optional[uuid.UUID] = None
+    target_version_number: Optional[int] = None
+    mode: Literal["code_only", "code_and_data"] = "code_only"
+    confirm_data_restore: bool = False
+    reason: Optional[str] = None
+
+
+class DataLossWarning(BaseModel):
+    target_version: int
+    snapshot_ref: str
+    snapshot_time: Optional[datetime] = None
+    time_window_seconds: int
+    current_records: int
+    target_records: int
+    estimated_records_lost: int
+    recovery_snapshot_available: bool = True
+    message: str
+
+
+class RollbackOperationResponse(BaseModel):
+    operation_id: uuid.UUID
+    type: Literal["rollback"] = "rollback"
+    status: Literal["succeeded", "failed"] = "succeeded"
+    app_id: uuid.UUID
+    version_id: uuid.UUID
+    version_number: int
+    target_version_number: int
+    mode: Literal["code_only", "code_and_data"]
+    recovery_snapshot_ref: str
+    data_restored: bool
+    data_loss_warning: Optional[DataLossWarning] = None
+    created_at: datetime
 
 
 class ValidationCheckResponse(BaseModel):
