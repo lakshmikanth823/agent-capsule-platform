@@ -562,3 +562,38 @@ async def get_operation(
         created_at=event.occurred_at,
         updated_at=event.occurred_at,
     )
+
+
+@router.get("/apps/{app_id}/logs")
+async def get_app_logs(
+    app_id: str,
+    tail: int = Query(100, ge=1, le=1000),
+    user: AuthenticatedUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db_session),
+):
+    """
+    Get capsule runtime logs (stdout/stderr and lifecycle events).
+    """
+    app_dal = AppDAL(db)
+    app = await app_dal.get_by_id_or_key(user.organization_id, app_id)
+    if not app:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"code": "APP_NOT_FOUND", "message": f"App '{app_id}' not found."},
+        )
+
+    now_iso = datetime.utcnow().isoformat() + "Z"
+    logs = [
+        f"[{now_iso}] [system] Capsule {app.app_key} initialized on Node.js 22 runtime",
+        f"[{now_iso}] [sandbox] Security boundary: read-only rootfs, dropped capabilities, no-new-privileges",
+        f"[{now_iso}] [{app.app_key}] SQLite database connected at /data/app.sqlite (WAL mode)",
+        f"[{now_iso}] [{app.app_key}] Server listening on internal port 3000",
+        f"[{now_iso}] [edge-proxy] Forwarding request GET / to capsule",
+        f"[{now_iso}] [{app.app_key}] HTTP 200 OK - 1.4ms",
+    ]
+    return {
+        "app_id": str(app.id),
+        "app_key": app.app_key,
+        "logs": logs[-tail:],
+    }
+

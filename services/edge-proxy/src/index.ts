@@ -8,6 +8,7 @@
  */
 import http from 'node:http';
 import path from 'node:path';
+import fs from 'node:fs';
 import { loadConfig, type ProxyConfig } from './config.js';
 import { signJwt, verifyJwt } from './crypto.js';
 import {
@@ -181,7 +182,65 @@ export function createEdgeProxyServer(options?: {
         return;
       }
 
-      // Platform Root
+      // Proxy /v1/* API calls to control plane
+      if (pathname.startsWith('/v1')) {
+        const controlPlaneUrl = process.env.CONTROL_PLANE_URL || 'http://127.0.0.1:8000';
+        const targetUrl = new URL(`${pathname}${url.search}`, controlPlaneUrl);
+        const proxyReq = http.request(
+          targetUrl,
+          {
+            method: req.method,
+            headers: {
+              ...req.headers,
+              host: targetUrl.host,
+            },
+          },
+          (proxyRes) => {
+            res.writeHead(proxyRes.statusCode || 200, proxyRes.headers);
+            proxyRes.pipe(res);
+          }
+        );
+        proxyReq.on('error', (err) => {
+          res.writeHead(502, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'Control plane unavailable', details: err.message }));
+        });
+        req.pipe(proxyReq);
+        return;
+      }
+
+      // Serve Dashboard SPA Static Files
+      const distDir = path.resolve('apps/dashboard/dist');
+      const relativePath = pathname === '/' ? 'index.html' : pathname.replace(/^\//, '');
+      const filePath = path.join(distDir, relativePath);
+
+      if (fs.existsSync(filePath) && fs.statSync(filePath).isFile()) {
+        const ext = path.extname(filePath).toLowerCase();
+        const mimeTypes: Record<string, string> = {
+          '.html': 'text/html; charset=utf-8',
+          '.js': 'application/javascript; charset=utf-8',
+          '.css': 'text/css; charset=utf-8',
+          '.json': 'application/json',
+          '.png': 'image/png',
+          '.jpg': 'image/jpeg',
+          '.svg': 'image/svg+xml',
+          '.ico': 'image/x-icon',
+          '.woff2': 'font/woff2',
+        };
+        const contentType = mimeTypes[ext] || 'application/octet-stream';
+        res.writeHead(200, { 'Content-Type': contentType });
+        fs.createReadStream(filePath).pipe(res);
+        return;
+      }
+
+      // Fallback to index.html for SPA client-side routing
+      const indexHtmlPath = path.join(distDir, 'index.html');
+      if (fs.existsSync(indexHtmlPath)) {
+        res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+        fs.createReadStream(indexHtmlPath).pipe(res);
+        return;
+      }
+
+      // Platform Root Fallback
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ platform: 'Software Capsule Platform', domain: config.dashboardDomain }));
       return;
