@@ -4,10 +4,18 @@ export default defineConfig({
   test: {
     globals: true,
     environment: 'node',
+    server: {
+      deps: {
+        external: ['node:sqlite'],
+      },
+    },
     include: [
       'packages/*/tests/**/*.test.ts',
       'services/*/tests/**/*.test.ts',
       'apps/*/tests/**/*.test.ts',
     ],
+  },
+  ssr: {
+    external: ['node:sqlite'],
   },
 });
