@@ -20,6 +20,7 @@ htmlcov/
 
 # Local Capsule data & storage
 .capsule/
+data/
 *.sqlite
 *.sqlite-journal
 *.sqlite-wal
