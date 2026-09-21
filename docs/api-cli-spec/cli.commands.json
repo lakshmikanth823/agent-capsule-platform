@@ -1,0 +1,83 @@
+{
+  "version": "0.1.0",
+  "name": "capsule",
+  "commands": [
+    {
+      "command": "login",
+      "state_changing": false
+    },
+    {
+      "command": "init",
+      "state_changing": true
+    },
+    {
+      "command": "dev",
+      "state_changing": false
+    },
+    {
+      "command": "validate",
+      "state_changing": false
+    },
+    {
+      "command": "publish",
+      "state_changing": true,
+      "api": "POST /apps/{appId}/publish",
+      "idempotent": true
+    },
+    {
+      "command": "status",
+      "state_changing": false
+    },
+    {
+      "command": "app get",
+      "state_changing": false,
+      "api": "GET /apps/{appId}"
+    },
+    {
+      "command": "versions",
+      "state_changing": false,
+      "api": "GET /apps/{appId}/versions"
+    },
+    {
+      "command": "rollback",
+      "state_changing": true,
+      "api": "POST /apps/{appId}/rollback",
+      "idempotent": true
+    },
+    {
+      "command": "share add",
+      "state_changing": true,
+      "api": "POST /apps/{appId}/shares",
+      "idempotent": true
+    },
+    {
+      "command": "share list",
+      "state_changing": false,
+      "api": "GET /apps/{appId}/shares"
+    },
+    {
+      "command": "share revoke",
+      "state_changing": true,
+      "api": "DELETE /apps/{appId}/shares/{shareId}"
+    },
+    {
+      "command": "logs",
+      "state_changing": false,
+      "api": "GET /apps/{appId}/logs"
+    }
+  ],
+  "global_flags": [
+    "--json"
+  ],
+  "state_changing_headers": [
+    "Idempotency-Key"
+  ],
+  "exit_codes": {
+    "0": "success",
+    "2": "manifest/schema error",
+    "3": "policy violation",
+    "4": "approval required",
+    "5": "authentication/authorization error",
+    "10": "platform/network error"
+  }
+}

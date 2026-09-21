@@ -1,0 +1,41 @@
+apiVersion: capsule/v1alpha1
+
+id: leave-tracker
+name: leave-tracker
+shape: web-app
+runtime: node22
+
+roles:
+  - employee
+  - manager
+  - hr
+
+capabilities:
+  db:
+    type: sqlite
+  identity: true
+  files:
+    max_mb: 200
+  ai:
+    monthly_budget_usd: 5
+  connectors:
+    - name: slack.post
+      channel: "#hr-leave"
+      acts_as: service
+    - name: sheets.read
+      acts_as: viewer
+
+egress: []
+
+schedule: []
+
+sharing:
+  default: org
+
+limits:
+  cpu: small
+  memory_mb: 256
+  request_timeout_s: 30
+  db_max_mb: 500
+  blob_max_mb: 200
+  max_active_instances: 1
