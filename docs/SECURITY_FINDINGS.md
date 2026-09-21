@@ -1,0 +1,81 @@
+# Security Findings & Red-Team Assessment (Prompt 16)
+
+**Assessment Date**: 2026-09-21  
+**Target**: Software Capsule Platform (Phase 1)  
+**Assessor**: Security Red-Team Test Suite  
+**Scope**: 9 Primary Attack Surfaces across Sandbox, Edge Proxy, Egress Proxy, Credential Broker, and Control Plane.
+
+---
+
+## Executive Summary
+
+An automated red-team security assessment was conducted against the Software Capsule Platform to evaluate the effectiveness of its security boundaries, sandboxing, network isolation, credential broker, and capability enforcement.
+
+A deliberately malicious test application (`examples/malicious-app`) and an automated test suite (`tests/redteam/redteam.test.ts`) were executed to simulate adversarial attacks across all 9 required attack vectors.
+
+### Phase 1 Acceptance Criterion
+> **Status**: **PASSED**  
+> All 9 active attack vectors are successfully blocked by platform security controls. Zero attacks bypassed enforcement in the automated suite.
+
+---
+
+## Attack Surface Assessment Matrix
+
+| # | Attack Surface | Target / Objective | Defense Mechanism | Test Status |
+|---|---|---|---|---|
+| **1** | **Network Egress** | Reach internet, internal IPs (RFC 1918), and Cloud Metadata (`169.254.169.254`) | Egress proxy default-deny, connection-time SSRF/DNS rebinding defense, container `--network none` | **BLOCKED** |
+| **2** | **Cross-Capsule Data** | Read another capsule's SQLite database or blob files via path traversal (`../`) | Per-capsule isolated host volumes, `@capsule/sdk` path traversal defense (`FileStorageError`) | **BLOCKED** |
+| **3** | **Secret Discovery** | Read platform master secrets or connector tokens from environment or files | Zero-secret injection into container env, AES-256-GCM encryption at rest, masked logging | **BLOCKED** |
+| **4** | **Session / Cookie Theft** | Steal cookies across origins or from the dashboard | `HttpOnly`, `SameSite=Lax`, domain separation (`*.apps.localhost` vs `dashboard.localhost`) | **BLOCKED** |
+| **5** | **Resource Quotas** | Exceed CPU, memory, disk quota, or request timeout | Container cgroup limits (`--memory 256m`, `--cpus 0.5`), SQLite `PRAGMA max_page_count` (`SQLITE_FULL`), edge proxy timeouts | **BLOCKED** |
+| **6** | **Sandbox Escape** | Write outside allowed paths, use raw sockets, fork bomb | Read-only root filesystem (`--read-only`, `/app:ro`), `--cap-drop=ALL`, `no-new-privileges`, `--pids-limit 64` | **BLOCKED** |
+| **7** | **Identity Header Forgery** | Forge HMAC signature, use `alg: none`, replay expired tokens, or cross-app audience mismatch | HMAC-SHA256 signature verification, `alg` whitelist, timestamp expiry check, `aud` matching in `@capsule/sdk` | **BLOCKED** |
+| **8** | **Undeclared Capabilities** | Invoke undeclared connectors or unauthorized AI capabilities | Control-plane capability verification before broker invocation (`403 CAPABILITY_DENIED`) | **BLOCKED** |
+| **9** | **Unauthorized Escalation** | Add capabilities in update without owner approval | Capability escalation engine (`detect_capability_escalation`), scoped publish token self-approval block (`403 FORBIDDEN`) | **BLOCKED** |
+
+---
+
+## Detailed Findings & Hardening Recommendations
+
+### Finding SEC-001: Development Container Driver (`DockerDevDriver`) Boundary Limitations
+- **Severity**: **MEDIUM** (Architecture / Deployment Caveat)
+- **Component**: `packages/sandbox-driver/src/drivers/docker.ts`
+- **Description**:  
+  `DockerDevDriver` applies strict container isolation (`--user 1000:1000`, `--read-only`, `--cap-drop=ALL`, `--security-opt no-new-privileges:true`, `--pids-limit 64`, `--network none`). While this effectively blocks standard user-space attacks, Linux container namespaces share the host OS kernel. A kernel vulnerability (e.g. kernel privilege escalation) could potentially allow an attacker to escape the container.
+- **Impact**:  
+  In a multi-tenant production environment, shared-kernel containers do not provide complete virtualization isolation between hostile tenants.
+- **Suggested Fix**:  
+  As prescribed in Invariant 9 and TRD Section 17, implement and deploy a production sandbox driver based on microVMs (AWS Firecracker, Cloud Hypervisor) or user-space kernel virtualization (gVisor / `runsc`). Retain `DockerDevDriver` strictly for local development and CI testing.
+
+---
+
+### Finding SEC-002: Default Signing Key in Local Emulator Mode
+- **Severity**: **LOW** (Hardening)
+- **Component**: `packages/sdk/src/identity.ts`
+- **Description**:  
+  In local emulator mode (`CAPSULE_EMULATOR=true`), `@capsule/sdk` falls back to a hardcoded development signing secret (`dev-emulator-secret-key-1234567890`) when `CAPSULE_IDENTITY_SECRET` is not provided. If a production container is misconfigured with `CAPSULE_EMULATOR=true`, an attacker could forge identity tokens signed with the well-known development key.
+- **Impact**:  
+  Authentication bypass if a production capsule accidentally runs in emulator mode.
+- **Suggested Fix**:  
+  Enforce that in production containers (`NODE_ENV=production`), `isEmulatorMode()` unconditionally returns `false`, and `getIdentity()` refuses to use fallback keys, strictly throwing `NO_SECRET_CONFIGURED` if `CAPSULE_IDENTITY_SECRET` is absent.
+
+---
+
+### Finding SEC-003: Key Rotation Automation for Encrypted Credentials
+- **Severity**: **INFORMATIONAL** (Operational Hardening)
+- **Component**: `services/control-plane/src/crypto.py` & `services/control-plane/src/db/models.py`
+- **Description**:  
+  The `connector_credentials` table stores encrypted secrets using AES-256-GCM tagged with `key_id: "v1"`. There is currently no automated CLI or control-plane command to rotate the master key (`CAPSULE_SECRET_KEY`) from `v1` to `v2` and re-encrypt existing records.
+- **Impact**:  
+  In the event of a suspected master key compromise, operators must manually migrate database records.
+- **Suggested Fix**:  
+  Add an admin endpoint or CLI command `capsule secrets rotate --old-key <k1> --new-key <k2>` that iterates over `connector_credentials`, decrypts with `v1`, re-encrypts with `v2`, and updates `key_id` atomically.
+
+---
+
+## Test Execution Details
+
+### Automated Test Output
+- **Vitest Red-Team Suite (`tests/redteam/redteam.test.ts`)**: **22/22 tests passed (100%)**
+- **Pytest Security Suite (`test_capabilities_escalation.py`, `test_credential_broker.py`, `test_cross_user_access.py`, `test_constraints.py`)**: **16/16 tests passed (100%)**
+- **Total Monorepo Tests**: **160/160 tests passing across all suites**

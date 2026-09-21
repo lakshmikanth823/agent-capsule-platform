@@ -1,0 +1,27 @@
+apiVersion: capsule/v1alpha1
+
+id: malicious-app
+name: Malicious Test App
+shape: web-app
+runtime: node22
+
+roles:
+  - user
+
+capabilities:
+  db:
+    type: sqlite
+  identity: true
+
+egress: []
+
+sharing:
+  default: org
+
+limits:
+  cpu: small
+  memory_mb: 256
+  request_timeout_s: 30
+  db_max_mb: 50
+  blob_max_mb: 50
+  max_active_instances: 1

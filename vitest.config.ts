@@ -13,6 +13,7 @@ export default defineConfig({
       'packages/*/tests/**/*.test.ts',
       'services/*/tests/**/*.test.ts',
       'apps/*/tests/**/*.test.ts',
+      'tests/**/*.test.ts',
     ],
   },
   ssr: {
