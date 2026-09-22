@@ -62,7 +62,7 @@ jobs:
         ports:
           - 5432:5432
         options: >-
-          --health-cmd pg_isready
+          --health-cmd "pg_isready -U capsule_user -d capsule_test"
           --health-interval 5s
           --health-timeout 5s
           --health-retries 5
@@ -161,6 +161,7 @@ jobs:
     name: Build & Scan Docker Images
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
         service:
           - name: control-plane
@@ -217,7 +218,7 @@ jobs:
         ports:
           - 5432:5432
         options: >-
-          --health-cmd pg_isready
+          --health-cmd "pg_isready -U capsule_user -d capsule_redteam"
           --health-interval 5s
           --health-timeout 5s
           --health-retries 5
