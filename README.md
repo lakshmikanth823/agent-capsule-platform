@@ -5,6 +5,9 @@
 </p>
 
 <p align="center">
+  <a href="https://github.com/lakshmikanth823/agent-capsule-platform/actions/workflows/ci.yml">
+    <img src="https://github.com/lakshmikanth823/agent-capsule-platform/actions/workflows/ci.yml/badge.svg" alt="CI Pipeline" />
+  </a>
   <img src="https://img.shields.io/badge/tests-351%20passed%20(100%25)-success?style=for-the-badge&logo=vitest" alt="Tests passing" />
   <img src="https://img.shields.io/badge/typescript-224%20passed-blue?style=for-the-badge&logo=typescript" alt="TypeScript Tests" />
   <img src="https://img.shields.io/badge/python-100%20passed-blue?style=for-the-badge&logo=python" alt="Python Tests" />
@@ -19,6 +22,10 @@
 The **Agent Capsule Platform** empowers external AI agents (via Anthropic Claude, Cursor, Antigravity, or custom LLMs) and engineering teams to safely build, publish, share, and operate small, single-purpose web applications—**capsules**—without giving untrusted code access to host infrastructure, cloud credentials, or external networks.
 
 Every capsule executes inside a **hardened user-space sandbox** with its own dedicated SQLite database, isolated subdomain origin, default-deny network egress proxy, centralized AI gateway, and tamper-evident audit logging.
+
+<p align="center">
+  <img src="docs/Software_Capsule_Architecture_Diagram.png" alt="Software Capsule Platform Architecture" width="850" />
+</p>
 
 ```
                      ┌───────────────────────────────────────────────────────────┐
@@ -56,6 +63,7 @@ Every capsule executes inside a **hardened user-space sandbox** with its own ded
                                                      │   LLMs / Google Sheets    │
                                                      └───────────────────────────┘
 ```
+
 
 ---
 
@@ -101,6 +109,10 @@ Every capsule executes inside a **hardened user-space sandbox** with its own ded
 ---
 
 ## 📁 Repository Structure
+
+<p align="center">
+  <img src="docs/Frontend_Wireframes.png" alt="Dashboard & Developer Console Preview" width="850" />
+</p>
 
 ```
 .
