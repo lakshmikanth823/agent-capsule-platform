@@ -14,7 +14,9 @@ describe('CLI Suspend & Resume Commands (Prompt 23)', () => {
       suspendApp: vi.fn(),
       resumeApp: vi.fn(),
     };
-    (ApiClient as any).mockImplementation(() => mockClient);
+    (ApiClient as any).mockImplementation(function() {
+      return mockClient;
+    });
   });
 
   it('should require a non-empty reason to suspend', async () => {

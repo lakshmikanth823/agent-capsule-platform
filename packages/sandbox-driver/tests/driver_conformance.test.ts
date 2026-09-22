@@ -4,9 +4,12 @@ import fs from 'node:fs/promises';
 import {
   DockerDevDriver,
   GVisorDriver,
+  isDockerAvailable,
   type SandboxDriver,
   type SandboxSpec,
 } from '../src/index.js';
+
+const hasDocker = isDockerAvailable();
 
 describe('SandboxDriver Conformance Test Suite (Prompt 21B)', () => {
   const driversToTest: Array<{
@@ -165,7 +168,7 @@ describe('SandboxDriver Conformance Test Suite (Prompt 21B)', () => {
   // 3. Lifecycle Transitions Conformance (Execute start, forward, suspend, resume, stop, destroy)
   // -------------------------------------------------------------------------
   for (const { name, factory } of driversToTest) {
-    describe(`Runtime Lifecycle Conformance: ${name}`, { timeout: 30000 }, () => {
+    describe.skipIf(!hasDocker)(`Runtime Lifecycle Conformance: ${name}`, { timeout: 30000 }, () => {
       let driver: SandboxDriver;
       let instanceId: string | null = null;
 

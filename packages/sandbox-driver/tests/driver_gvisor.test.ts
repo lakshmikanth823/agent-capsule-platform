@@ -3,9 +3,10 @@ import path from 'node:path';
 import fs from 'node:fs/promises';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { GVisorDriver, type SandboxSpec } from '../src/index.js';
+import { GVisorDriver, isDockerAvailable, type SandboxSpec } from '../src/index.js';
 
 const execFileAsync = promisify(execFile);
+const hasDocker = isDockerAvailable();
 
 describe('GVisorDriver (Option A Production Sandbox Driver)', () => {
   const sampleSpec: SandboxSpec = {
@@ -149,7 +150,7 @@ describe('GVisorDriver (Option A Production Sandbox Driver)', () => {
     }
   });
 
-  describe('Prompt 21B Acceptance: Sample App Execution & Exploit Blockage', { timeout: 35000 }, () => {
+  describe.skipIf(!hasDocker)('Prompt 21B Acceptance: Sample App Execution & Exploit Blockage', { timeout: 35000 }, () => {
     const testDataDir = path.resolve('data/test-gvisor-acceptance');
     let activeInstanceId: string | null = null;
     let driver: GVisorDriver;

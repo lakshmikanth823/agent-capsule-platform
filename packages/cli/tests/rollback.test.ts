@@ -14,7 +14,9 @@ describe('CLI Rollback & Versions Commands', () => {
       rollback: vi.fn(),
       listVersions: vi.fn(),
     };
-    (ApiClient as any).mockImplementation(() => mockClient);
+    (ApiClient as any).mockImplementation(function() {
+      return mockClient;
+    });
   });
 
   it('should reject rollback when --version is missing', async () => {

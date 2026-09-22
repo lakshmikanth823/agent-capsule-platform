@@ -16,7 +16,9 @@ describe('Capsule CLI Inventory & Governance Commands (Prompt 20)', () => {
     mockClient = {
       request: vi.fn(),
     };
-    (ApiClient as any).mockImplementation(() => mockClient);
+    (ApiClient as any).mockImplementation(function() {
+      return mockClient;
+    });
   });
 
   it('should list organization inventory and output JSON', async () => {

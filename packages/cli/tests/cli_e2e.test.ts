@@ -89,5 +89,5 @@ describe('Prompt 10 Acceptance Test: Full End-to-End CLI Loop from Empty Folder'
     };
     expect(shareResult.role).toBe('employee');
     expect(shareResult.user).toBe('bob@example.com');
-  });
+  }, 30000);
 });

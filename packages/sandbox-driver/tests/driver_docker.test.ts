@@ -3,11 +3,12 @@ import path from 'node:path';
 import fs from 'node:fs/promises';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { DockerDevDriver, type SandboxSpec } from '../src/index.js';
+import { DockerDevDriver, isDockerAvailable, type SandboxSpec } from '../src/index.js';
 
 const execFileAsync = promisify(execFile);
+const hasDocker = isDockerAvailable();
 
-describe('DockerDevDriver Integration Tests', () => {
+describe.skipIf(!hasDocker)('DockerDevDriver Integration Tests', () => {
   const driver = new DockerDevDriver();
   const testDataDir = path.resolve('data/test-docker-capsule');
   let activeInstanceId: string | null = null;

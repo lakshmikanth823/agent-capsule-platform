@@ -12,9 +12,12 @@ import {
   DevMockSandboxDriver,
   DockerDevDriver,
   CapsuleLifecycleManager,
+  isDockerAvailable,
   type ForwardRequest,
 } from '@capsule/sandbox-driver';
 import path from 'node:path';
+
+const hasDocker = isDockerAvailable();
 
 describe('Edge Proxy Service', () => {
   let server: http.Server;
@@ -323,7 +326,7 @@ describe('Edge Proxy Service', () => {
   });
 });
 
-describe('Edge Proxy Acceptance Test (with DockerDevDriver & Leave Tracker App)', () => {
+describe.skipIf(!hasDocker)('Edge Proxy Acceptance Test (with DockerDevDriver & Leave Tracker App)', () => {
   let server: http.Server;
   let serverPort: number;
   let dockerDriver: DockerDevDriver;

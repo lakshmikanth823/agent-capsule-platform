@@ -12,7 +12,7 @@
  * WARNING: This driver is for local development and testing only.
  * It is NOT a production security boundary.
  */
-import { execFile } from 'node:child_process';
+import { execFile, spawnSync } from 'node:child_process';
 import { promisify } from 'node:util';
 import path from 'node:path';
 import fs from 'node:fs/promises';
@@ -28,9 +28,33 @@ import type {
 
 const execFileAsync = promisify(execFile);
 
+/**
+ * Check whether the Docker CLI is installed and the daemon is reachable.
+ */
+export function isDockerAvailable(): boolean {
+  try {
+    const res = spawnSync('docker', ['info'], { stdio: 'ignore', timeout: 3000 });
+    return res.status === 0;
+  } catch {
+    return false;
+  }
+}
+
 export class DockerDevDriver implements SandboxDriver {
   readonly name = 'docker-dev-driver';
   private instances = new Map<string, SandboxInstance>();
+
+  /**
+   * Check whether Docker CLI and daemon are available.
+   */
+  async isAvailable(): Promise<boolean> {
+    try {
+      await execFileAsync('docker', ['info']);
+      return true;
+    } catch {
+      return false;
+    }
+  }
 
   constructor() {
     // STARTUP GUARD: Refuse to start in production unless explicit override is set

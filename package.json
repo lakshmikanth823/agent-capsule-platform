@@ -11,25 +11,27 @@
     "apps/*",
     "examples/*"
   ],
+  "type": "module",
   "scripts": {
-    "build": "npm run --workspaces --if-present build",
+    "prebuild": "npm run --workspace=@capsule/manifest-schema --if-present build",
+    "build": "node scripts/build.js",
     "test": "npm run test:ts && npm run test:py",
     "test:ts": "vitest run",
     "test:redteam": "vitest run tests/redteam/redteam.test.ts",
-    "test:py": "powershell -Command \"if (Test-Path .venv/Scripts/python.exe) { .venv/Scripts/python.exe -m pytest services/control-plane/tests } else { python -m pytest services/control-plane/tests }\"",
+    "test:py": "node scripts/run-python.js -m pytest services/control-plane/tests",
     "lint": "npm run --workspaces --if-present lint",
     "format": "prettier --write \"**/*.{ts,js,json,md,yaml,yml}\"",
     "typecheck": "npm run --workspaces --if-present typecheck",
-    "db:migrate": "powershell -Command \"if (Test-Path .venv/Scripts/python.exe) { .venv/Scripts/python.exe -m alembic -c services/control-plane/alembic.ini upgrade head } else { python -m alembic -c services/control-plane/alembic.ini upgrade head }\"",
-    "db:seed": "powershell -Command \"if (Test-Path .venv/Scripts/python.exe) { .venv/Scripts/python.exe services/control-plane/src/db/seed.py } else { python services/control-plane/src/db/seed.py }\"",
-    "db:reset": "powershell -Command \"if (Test-Path .venv/Scripts/python.exe) { .venv/Scripts/python.exe services/control-plane/src/db/reset.py } else { python services/control-plane/src/db/reset.py }\"",
-    "control-plane:dev": "powershell -Command \"if (Test-Path .venv/Scripts/python.exe) { .venv/Scripts/python.exe -m uvicorn --app-dir services/control-plane/src main:app --port 8000 --reload } else { uvicorn --app-dir services/control-plane/src main:app --port 8000 --reload }\""
+    "db:migrate": "node scripts/run-python.js -m alembic -c services/control-plane/alembic.ini upgrade head",
+    "db:seed": "node scripts/run-python.js services/control-plane/src/db/seed.py",
+    "db:reset": "node scripts/run-python.js services/control-plane/src/db/reset.py",
+    "control-plane:dev": "node scripts/run-python.js -m uvicorn --app-dir services/control-plane/src main:app --port 8000 --reload"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
     "prettier": "^3.3.0",
     "typescript": "^5.5.0",
-    "vitest": "^2.0.0"
+    "vitest": "^4.1.11"
   },
   "engines": {
     "node": ">=22.0.0",

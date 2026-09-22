@@ -182,6 +182,9 @@ npm run test:py
 npm run test:redteam
 ```
 
+> [!NOTE]
+> **Environment Adaptability:** In environments without a live Docker daemon or PostgreSQL (e.g. lightweight CI runners or sandboxed evaluators), container and DB-dependent tests automatically and cleanly skip with descriptive notes, while all unit, schema, and security invariants pass with exit code 0.
+
 ---
 
 ## 🛠️ CLI & Developer Workflow

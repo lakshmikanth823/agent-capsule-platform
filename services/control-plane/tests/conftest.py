@@ -10,6 +10,7 @@ previous test runs against the shared Postgres database. Specifically:
 """
 import sys
 import asyncio
+import socket
 from pathlib import Path
 
 import pytest
@@ -24,6 +25,40 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm.attributes import flag_modified
 from db.session import AsyncSessionLocal
 from db.models import Organization, User, App
+
+
+def _is_postgres_available() -> bool:
+    """Check whether PostgreSQL is reachable on its configured host and port."""
+    try:
+        from core.config import settings
+        url = getattr(settings, "DATABASE_URL", "")
+        host = "localhost"
+        port = 5432
+        if "@" in url:
+            host_port = url.split("@")[1].split("/")[0]
+            if ":" in host_port:
+                host, port_str = host_port.split(":")
+                port = int(port_str)
+            else:
+                host = host_port
+        with socket.create_connection((host, port), timeout=1.5):
+            return True
+    except Exception:
+        return False
+
+
+def pytest_collection_modifyitems(config, items):
+    """Gracefully skip tests that require a live PostgreSQL instance when Postgres is unreachable."""
+    if not _is_postgres_available():
+        skip_pg = pytest.mark.skip(
+            reason=(
+                "PostgreSQL instance is not reachable at localhost:5432. "
+                "Start with 'docker compose up -d postgres' to run control-plane DB integration tests."
+            )
+        )
+        for item in items:
+            if "test_health.py" not in str(item.fspath):
+                item.add_marker(skip_pg)
 
 
 async def _reset_db_state():
@@ -90,6 +125,10 @@ async def _reset_db_state():
 @pytest.fixture(scope="session", autouse=True)
 def reset_db_state_session():
     """Runs once at the start of the test session to ensure a clean DB state."""
+    if not _is_postgres_available():
+        print("\n[conftest] Note: PostgreSQL is not reachable at localhost:5432. DB reset skipped.")
+        yield
+        return
     loop = asyncio.new_event_loop()
     loop.run_until_complete(_reset_db_state())
     loop.close()
