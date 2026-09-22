@@ -63,6 +63,7 @@ capsule-platform/
 ## 2. Component Details & Responsibilities
 
 ### 2.1 `services/control-plane/`
+
 - **Tech Stack:** Python 3.12+ / FastAPI / SQLAlchemy / asyncpg / Pydantic v2
 - **Responsibilities:**
   - Control-plane REST API (`/v1/capsules`, `/v1/capsules/{id}/publish`, `/v1/capsules/{id}/shares`, etc.)
@@ -90,6 +91,7 @@ capsule-platform/
 ---
 
 ### 2.2 `services/edge-proxy/`
+
 - **Tech Stack:** Node.js 22 / TypeScript / Fastify or HTTP reverse proxy
 - **Responsibilities:**
   - Front door for browser users requesting Capsule applications
@@ -116,6 +118,7 @@ capsule-platform/
 ---
 
 ### 2.3 `services/builder/`
+
 - **Tech Stack:** Dockerized isolated build runner (Node 22 / npm)
 - **Responsibilities:**
   - Builds untrusted source code in a constrained, ephemeral container
@@ -135,6 +138,7 @@ capsule-platform/
 ---
 
 ### 2.4 `packages/manifest-schema/`
+
 - **Tech Stack:** TypeScript / JSON Schema Draft 2020-12
 - **Responsibilities:**
   - Publishes `capsule.manifest.schema.json`
@@ -156,6 +160,7 @@ capsule-platform/
 ---
 
 ### 2.5 `packages/sandbox-driver/`
+
 - **Tech Stack:** TypeScript (or Python adapter)
 - **Responsibilities:**
   - Defines the `SandboxDriver` interface (Project Rule 9)
@@ -176,6 +181,7 @@ capsule-platform/
 ---
 
 ### 2.6 `packages/sdk/`
+
 - **Tech Stack:** Node.js 22 / TypeScript
 - **Package Name:** `@capsule/sdk`
 - **Responsibilities:**
@@ -197,6 +203,7 @@ capsule-platform/
 ---
 
 ### 2.7 `packages/cli/`
+
 - **Tech Stack:** TypeScript / Node.js 22 / `commander`
 - **Binary Name:** `capsule`
 - **Responsibilities:**
@@ -220,6 +227,7 @@ capsule-platform/
 ---
 
 ### 2.8 `apps/dashboard/`
+
 - **Tech Stack:** React / TypeScript / Vite / Tailwind CSS
 - **Responsibilities:**
   - Human web dashboard for inspecting Capsules, managing sharing, and previewing permissions
@@ -238,6 +246,7 @@ capsule-platform/
 ---
 
 ### 2.9 `examples/leave-tracker/`
+
 - **Tech Stack:** Node.js 22 / TypeScript / `@capsule/sdk`
 - **Responsibilities:**
   - Canonical reference application matching TRD Section 6 & PRD
@@ -256,6 +265,7 @@ capsule-platform/
 ---
 
 ### 2.10 `tests/e2e/`
+
 - **Responsibilities:**
   - Automated end-to-end integration tests verifying Phase 0 exit criterion
   - `phase0_loop.test.ts`: Automates `capsule init` $\rightarrow$ `validate` $\rightarrow$ `publish` $\rightarrow$ `share` $\rightarrow$ colleague HTTP fetch in $<60$ seconds.

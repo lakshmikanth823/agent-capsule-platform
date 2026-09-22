@@ -1,8 +1,8 @@
 /**
  * CLI Control-Plane API Client
  */
-import { loadConfig, type CliConfig } from './config.js';
-import { CliError } from './errors.js';
+import { loadConfig, type CliConfig } from "./config.js";
+import { CliError } from "./errors.js";
 
 export interface RequestOptions {
   method?: string;
@@ -27,36 +27,39 @@ export class ApiClient {
     return this.config.token;
   }
 
-  async request<T = any>(endpoint: string, options: RequestOptions = {}): Promise<T> {
-    const url = `${this.apiUrl.replace(/\/$/, '')}${endpoint}`;
+  async request<T = any>(
+    endpoint: string,
+    options: RequestOptions = {},
+  ): Promise<T> {
+    const url = `${this.apiUrl.replace(/\/$/, "")}${endpoint}`;
     const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-      Accept: 'application/json',
+      "Content-Type": "application/json",
+      Accept: "application/json",
       ...options.headers,
     };
 
     const authToken = options.token || this.token;
     if (authToken) {
-      headers['Authorization'] = `Bearer ${authToken}`;
+      headers["Authorization"] = `Bearer ${authToken}`;
     }
 
     if (options.idempotencyKey) {
-      headers['Idempotency-Key'] = options.idempotencyKey;
+      headers["Idempotency-Key"] = options.idempotencyKey;
     }
 
     let response: Response;
     try {
       response = await fetch(url, {
-        method: options.method || 'GET',
+        method: options.method || "GET",
         headers,
         body: options.body ? JSON.stringify(options.body) : undefined,
       });
     } catch (err: any) {
       throw new CliError({
-        code: 'PLATFORM_NETWORK_ERROR',
+        code: "PLATFORM_NETWORK_ERROR",
         message: `Failed to connect to control-plane at ${this.apiUrl}: ${err.message || err}`,
         exitCode: 10,
-        hint: 'Ensure control-plane service is running on the configured apiUrl.',
+        hint: "Ensure control-plane service is running on the configured apiUrl.",
       });
     }
 
@@ -74,9 +77,24 @@ export class ApiClient {
     if (!response.ok) {
       const status = response.status;
       const detail = data?.detail;
-      const message = typeof detail === 'string' ? detail : detail?.message || `HTTP ${status} ${response.statusText}`;
-      const code = detail?.code || (status === 401 ? 'UNAUTHORIZED' : status === 403 ? 'FORBIDDEN' : status === 404 ? 'NOT_FOUND' : status === 409 ? 'CONFLICT' : 'API_ERROR');
-      const hint = detail?.hint || (status === 401 ? 'Run `capsule login` to authenticate.' : undefined);
+      const message =
+        typeof detail === "string"
+          ? detail
+          : detail?.message || `HTTP ${status} ${response.statusText}`;
+      const code =
+        detail?.code ||
+        (status === 401
+          ? "UNAUTHORIZED"
+          : status === 403
+            ? "FORBIDDEN"
+            : status === 404
+              ? "NOT_FOUND"
+              : status === 409
+                ? "CONFLICT"
+                : "API_ERROR");
+      const hint =
+        detail?.hint ||
+        (status === 401 ? "Run `capsule login` to authenticate." : undefined);
 
       let exitCode = 1;
       if (status === 401 || status === 403) exitCode = 5;
@@ -99,7 +117,7 @@ export class ApiClient {
 
   // Auth
   async verifyAuth(token: string): Promise<any> {
-    return this.request('/v1/auth/status', { token });
+    return this.request("/v1/auth/status", { token });
   }
 
   // Apps
@@ -108,12 +126,16 @@ export class ApiClient {
   }
 
   async listApps(): Promise<any[]> {
-    return this.request('/v1/apps');
+    return this.request("/v1/apps");
   }
 
-  async createApp(payload: { id: string; name: string; manifest: any }): Promise<any> {
-    return this.request('/v1/apps', {
-      method: 'POST',
+  async createApp(payload: {
+    id: string;
+    name: string;
+    manifest: any;
+  }): Promise<any> {
+    return this.request("/v1/apps", {
+      method: "POST",
       body: payload,
     });
   }
@@ -130,10 +152,10 @@ export class ApiClient {
       expected_version?: number;
       expected_current_version?: number;
     },
-    options: { idempotencyKey?: string } = {}
+    options: { idempotencyKey?: string } = {},
   ): Promise<any> {
     return this.request(`/v1/apps/${appIdOrKey}/publish`, {
-      method: 'POST',
+      method: "POST",
       body: payload,
       idempotencyKey: options.idempotencyKey,
     });
@@ -157,17 +179,17 @@ export class ApiClient {
       group_name?: string;
       app_role: string;
       expires_at?: string;
-    }
+    },
   ): Promise<any> {
     return this.request(`/v1/apps/${appIdOrKey}/shares`, {
-      method: 'POST',
+      method: "POST",
       body: payload,
     });
   }
 
   async revokeShare(appIdOrKey: string, shareId: string): Promise<void> {
     await this.request(`/v1/apps/${appIdOrKey}/shares/${shareId}`, {
-      method: 'DELETE',
+      method: "DELETE",
     });
   }
 
@@ -177,14 +199,14 @@ export class ApiClient {
     payload: {
       target_version_number?: number;
       target_version_id?: string;
-      mode?: 'code_only' | 'code_and_data';
+      mode?: "code_only" | "code_and_data";
       confirm_data_restore?: boolean;
       reason?: string;
     },
-    options: { idempotencyKey?: string } = {}
+    options: { idempotencyKey?: string } = {},
   ): Promise<any> {
     return this.request(`/v1/apps/${appIdOrKey}/rollback`, {
-      method: 'POST',
+      method: "POST",
       body: payload,
       idempotencyKey: options.idempotencyKey,
     });
@@ -193,15 +215,14 @@ export class ApiClient {
   // Kill Switch
   async suspendApp(appIdOrKey: string, reason: string): Promise<any> {
     return this.request(`/v1/kill-switch/apps/${appIdOrKey}/suspend`, {
-      method: 'POST',
+      method: "POST",
       body: { reason },
     });
   }
 
   async resumeApp(appIdOrKey: string): Promise<any> {
     return this.request(`/v1/kill-switch/apps/${appIdOrKey}/resume`, {
-      method: 'POST',
+      method: "POST",
     });
   }
 }
-

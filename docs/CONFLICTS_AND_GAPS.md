@@ -5,6 +5,7 @@
 **Source Documents Analyzed:** `docs/TRD.md`, `docs/PRD.md`, `docs/api-cli-spec/`, `docs/backend-database-schema/`, `docs/manifest-spec/`, `docs/FRONTEND_DESIGN.md`, `docs/Software_Capsule_Architecture_Diagram.*`
 
 Per the Project Rules:
+
 > "If documents conflict, or something you need is missing, STOP and ask me. Do not invent requirements. Record every answer in docs/DECISIONS.md with the date."
 
 This document catalogs every contradiction between specifications and every missing technical detail required before coding Phase 0.
@@ -14,6 +15,7 @@ This document catalogs every contradiction between specifications and every miss
 ## 1. Contradictions Between Documents
 
 ### Item 1.1: Resource Naming & REST Paths (`capsules` vs `apps`)
+
 - **Contradiction:**
   - **`docs/TRD.md` (Section 4):** Uses `/v1/capsules`, `/v1/capsules/{id}`, `/v1/capsules/{id}/deploy`, `/v1/capsules/{id}/share`, `/v1/capsules/{id}/versions`.
   - **`docs/api-cli-spec/API_CLI_SPEC.md` & `openapi.yaml`:** Uses `/apps`, `/apps/{appId}`, `/apps/{appId}/publish`, `/apps/{appId}/shares`, `/apps/{appId}/versions`.
@@ -28,6 +30,7 @@ This document catalogs every contradiction between specifications and every miss
 ---
 
 ### Item 1.2: Publish Endpoint Action Verb (`/deploy` vs `/publish`)
+
 - **Contradiction:**
   - **`docs/TRD.md` (Section 4):** Proposes `POST /v1/capsules/{id}/deploy`.
   - **`docs/api-cli-spec/` & `CLI_SPEC.md`:** Specifies `POST /apps/{appId}/publish` and CLI command `capsule publish`.
@@ -39,6 +42,7 @@ This document catalogs every contradiction between specifications and every miss
 ---
 
 ### Item 1.3: Database Snapshot on Version 1 (`NOT NULL` constraint)
+
 - **Contradiction / Dilemma:**
   - **`docs/TRD.md` (Section 12):** "A database snapshot MUST be created on every deployment."
   - **`docs/backend-database-schema/backend_schema.sql`:** `app_versions.db_snapshot_ref text NOT NULL`.
@@ -53,6 +57,7 @@ This document catalogs every contradiction between specifications and every miss
 ## 2. Missing Technical Details & Gaps
 
 ### Item 2.1: Control Plane Implementation Language & Framework
+
 - **Gap:**
   - `docs/TRD.md` Table 42 proposes:
     - Control API: `FastAPI/Python`
@@ -73,6 +78,7 @@ This document catalogs every contradiction between specifications and every miss
 ---
 
 ### Item 2.2: Sandbox Driver Implementation for Phase 0
+
 - **Gap:**
   - TRD Section 9: "Sandbox decision: TBD. Evaluate Firecracker, gVisor, or equivalent."
   - The local development environment is Windows with Docker Desktop (WSL2 backend). Firecracker requires Linux KVM hardware virtualization.
@@ -97,6 +103,7 @@ This document catalogs every contradiction between specifications and every miss
 ---
 
 ### Item 2.3: Registrable Domain & Local Origin Isolation Strategy
+
 - **Gap:**
   - TRD Section 16 & 55: "The exact registrable-domain strategy is TBD and requires browser-security review."
   - Security Invariant 5: "Applications are served from a different origin than the dashboard."
@@ -113,6 +120,7 @@ This document catalogs every contradiction between specifications and every miss
 ---
 
 ### Item 2.4: Identity / Authentication Provider for Phase 0 & Automated Tests
+
 - **Gap:**
   - TRD Section 15 & PRD Section 5 require Google/OIDC login.
   - However, automated integration tests and the 60-second Phase 0 acceptance test ("an agent publishes a small app with the CLI and a colleague opens it, in under 60 seconds") cannot depend on interactive Google browser login prompts or external cloud connectivity during automated test runs.
@@ -126,6 +134,7 @@ This document catalogs every contradiction between specifications and every miss
 ---
 
 ### Item 2.5: SQLite Library in Blessed Node.js 22 Runtime SDK
+
 - **Gap:**
   - TRD Section 7 specifies `Node.js 22 + TypeScript web application using the platform SDK`.
   - Node.js 22 includes experimental native `node:sqlite`, while `better-sqlite3` is the incumbent production standard.
@@ -137,6 +146,7 @@ This document catalogs every contradiction between specifications and every miss
 ---
 
 ### Item 2.6: Object Storage Driver for Phase 0
+
 - **Gap:**
   - TRD Table 42 specifies "S3-compatible object storage".
   - Running MinIO locally introduces an additional dependency for simple Phase 0 test runs.
@@ -151,6 +161,7 @@ This document catalogs every contradiction between specifications and every miss
 ---
 
 ### Item 2.7: Monorepo Package Management & Tooling
+
 - **Gap:**
   - No specific package manager is dictated in `docs/TRD.md`.
 - **Proposed Default:**
@@ -163,15 +174,15 @@ This document catalogs every contradiction between specifications and every miss
 
 ## Summary of Decisions Needed from User
 
-| # | Topic | Proposed Default | User Decision |
-|---|---|---|---|
-| 1 | Resource Naming | Use `capsules` for API paths (`/v1/capsules`) and entities | [Pending User Approval] |
-| 2 | Deployment Verb | Use `POST /v1/capsules/{id}/publish` | [Pending User Approval] |
-| 3 | Version 1 Snapshot | Create empty baseline SQLite snapshot on Version 1 | [Pending User Approval] |
-| 4 | Control Plane Language | Python (`FastAPI`) per TRD Table 42 | [Pending User Approval] |
-| 5 | Sandbox Driver | `DockerSandboxDriver` (Docker Desktop WSL2) for Phase 0 | [Pending User Approval] |
-| 6 | Local Origin Strategy | `http://<capsule-id>.localhost:8080` | [Pending User Approval] |
-| 7 | OIDC for Tests | Built-in Mock OIDC provider for tests/local dev | [Pending User Approval] |
-| 8 | SQLite Library | `better-sqlite3` in `@capsule/sdk` | [Pending User Approval] |
-| 9 | Storage Driver | `LocalStorageDriver` default for local Phase 0 | [Pending User Approval] |
-| 10 | Package Manager | `pnpm` workspaces | [Pending User Approval] |
+| #   | Topic                  | Proposed Default                                           | User Decision           |
+| --- | ---------------------- | ---------------------------------------------------------- | ----------------------- |
+| 1   | Resource Naming        | Use `capsules` for API paths (`/v1/capsules`) and entities | [Pending User Approval] |
+| 2   | Deployment Verb        | Use `POST /v1/capsules/{id}/publish`                       | [Pending User Approval] |
+| 3   | Version 1 Snapshot     | Create empty baseline SQLite snapshot on Version 1         | [Pending User Approval] |
+| 4   | Control Plane Language | Python (`FastAPI`) per TRD Table 42                        | [Pending User Approval] |
+| 5   | Sandbox Driver         | `DockerSandboxDriver` (Docker Desktop WSL2) for Phase 0    | [Pending User Approval] |
+| 6   | Local Origin Strategy  | `http://<capsule-id>.localhost:8080`                       | [Pending User Approval] |
+| 7   | OIDC for Tests         | Built-in Mock OIDC provider for tests/local dev            | [Pending User Approval] |
+| 8   | SQLite Library         | `better-sqlite3` in `@capsule/sdk`                         | [Pending User Approval] |
+| 9   | Storage Driver         | `LocalStorageDriver` default for local Phase 0             | [Pending User Approval] |
+| 10  | Package Manager        | `pnpm` workspaces                                          | [Pending User Approval] |

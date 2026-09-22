@@ -66,12 +66,8 @@
       "api": "GET /apps/{appId}/logs"
     }
   ],
-  "global_flags": [
-    "--json"
-  ],
-  "state_changing_headers": [
-    "Idempotency-Key"
-  ],
+  "global_flags": ["--json"],
+  "state_changing_headers": ["Idempotency-Key"],
   "exit_codes": {
     "0": "success",
     "2": "manifest/schema error",

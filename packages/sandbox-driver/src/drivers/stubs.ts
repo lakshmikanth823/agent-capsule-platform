@@ -13,14 +13,14 @@ import type {
   LogOptions,
   ForwardRequest,
   ForwardResponse,
-} from '../interface.js';
+} from "../interface.js";
 
 export class NotImplementedError extends Error {
   constructor(driverName: string, details: string) {
     super(
-      `[${driverName}] Production driver is not implemented in Phase 0. ${details} Use DockerDevDriver for development and testing.`
+      `[${driverName}] Production driver is not implemented in Phase 0. ${details} Use DockerDevDriver for development and testing.`,
     );
-    this.name = 'NotImplementedError';
+    this.name = "NotImplementedError";
   }
 }
 
@@ -28,8 +28,7 @@ export class NotImplementedError extends Error {
  * GVisorDriver
  * Phase 1 Production Driver: implemented in ./gvisor.ts
  */
-export { GVisorDriver, type GVisorDriverOptions } from './gvisor.js';
-
+export { GVisorDriver, type GVisorDriverOptions } from "./gvisor.js";
 
 /**
  * FirecrackerDriver (Production Stub)
@@ -46,42 +45,66 @@ export { GVisorDriver, type GVisorDriverOptions } from './gvisor.js';
  * Security boundary: Hardware-assisted virtualization (KVM).
  */
 export class FirecrackerDriver implements SandboxDriver {
-  readonly name = 'firecracker';
+  readonly name = "firecracker";
 
   async start(_spec: SandboxSpec): Promise<SandboxInstance> {
-    throw new NotImplementedError(this.name, 'Spawns Firecracker microVM via Jailer.');
+    throw new NotImplementedError(
+      this.name,
+      "Spawns Firecracker microVM via Jailer.",
+    );
   }
 
   async stop(_instanceId: string): Promise<void> {
-    throw new NotImplementedError(this.name, 'Sends shutdown signal to microVM.');
+    throw new NotImplementedError(
+      this.name,
+      "Sends shutdown signal to microVM.",
+    );
   }
 
   async suspend(_instanceId: string): Promise<void> {
-    throw new NotImplementedError(this.name, 'Pauses microVM vCPUs.');
+    throw new NotImplementedError(this.name, "Pauses microVM vCPUs.");
   }
 
   async resume(_instanceId: string): Promise<void> {
-    throw new NotImplementedError(this.name, 'Resumes microVM vCPUs.');
+    throw new NotImplementedError(this.name, "Resumes microVM vCPUs.");
   }
 
   async status(_instanceId: string): Promise<SandboxStatus> {
-    throw new NotImplementedError(this.name, 'Queries microVM state via Firecracker API socket.');
+    throw new NotImplementedError(
+      this.name,
+      "Queries microVM state via Firecracker API socket.",
+    );
   }
 
   async logs(_instanceId: string, _options?: LogOptions): Promise<string[]> {
-    throw new NotImplementedError(this.name, 'Streams microVM serial console/log pipe.');
+    throw new NotImplementedError(
+      this.name,
+      "Streams microVM serial console/log pipe.",
+    );
   }
 
-  async forwardRequest(_instanceId: string, _req: ForwardRequest): Promise<ForwardResponse> {
-    throw new NotImplementedError(this.name, 'Routes request to microVM via vsock or TAP interface.');
+  async forwardRequest(
+    _instanceId: string,
+    _req: ForwardRequest,
+  ): Promise<ForwardResponse> {
+    throw new NotImplementedError(
+      this.name,
+      "Routes request to microVM via vsock or TAP interface.",
+    );
   }
 
   async recover(_instanceId: string): Promise<SandboxInstance> {
-    throw new NotImplementedError(this.name, 'Restarts Firecracker microVM from snapshot.');
+    throw new NotImplementedError(
+      this.name,
+      "Restarts Firecracker microVM from snapshot.",
+    );
   }
 
   async destroy(_instanceId: string): Promise<void> {
-    throw new NotImplementedError(this.name, 'Kills microVM process and unmounts drive.');
+    throw new NotImplementedError(
+      this.name,
+      "Kills microVM process and unmounts drive.",
+    );
   }
 }
 
@@ -93,41 +116,56 @@ export class FirecrackerDriver implements SandboxDriver {
  *   GCP Cloud Run with gVisor sandbox, or Fly.io Machines).
  */
 export class ManagedSandboxDriver implements SandboxDriver {
-  readonly name = 'managed-provider';
+  readonly name = "managed-provider";
 
   async start(_spec: SandboxSpec): Promise<SandboxInstance> {
-    throw new NotImplementedError(this.name, 'Provisions managed container instance.');
+    throw new NotImplementedError(
+      this.name,
+      "Provisions managed container instance.",
+    );
   }
 
   async stop(_instanceId: string): Promise<void> {
-    throw new NotImplementedError(this.name, 'Stops managed container instance.');
+    throw new NotImplementedError(
+      this.name,
+      "Stops managed container instance.",
+    );
   }
 
   async suspend(_instanceId: string): Promise<void> {
-    throw new NotImplementedError(this.name, 'Scales instance to zero.');
+    throw new NotImplementedError(this.name, "Scales instance to zero.");
   }
 
   async resume(_instanceId: string): Promise<void> {
-    throw new NotImplementedError(this.name, 'Wakes instance from zero.');
+    throw new NotImplementedError(this.name, "Wakes instance from zero.");
   }
 
   async status(_instanceId: string): Promise<SandboxStatus> {
-    throw new NotImplementedError(this.name, 'Queries provider instance health API.');
+    throw new NotImplementedError(
+      this.name,
+      "Queries provider instance health API.",
+    );
   }
 
   async logs(_instanceId: string, _options?: LogOptions): Promise<string[]> {
-    throw new NotImplementedError(this.name, 'Streams cloud provider logs.');
+    throw new NotImplementedError(this.name, "Streams cloud provider logs.");
   }
 
-  async forwardRequest(_instanceId: string, _req: ForwardRequest): Promise<ForwardResponse> {
-    throw new NotImplementedError(this.name, 'Proxies HTTP request to managed endpoint.');
+  async forwardRequest(
+    _instanceId: string,
+    _req: ForwardRequest,
+  ): Promise<ForwardResponse> {
+    throw new NotImplementedError(
+      this.name,
+      "Proxies HTTP request to managed endpoint.",
+    );
   }
 
   async recover(_instanceId: string): Promise<SandboxInstance> {
-    throw new NotImplementedError(this.name, 'Recreates managed instance.');
+    throw new NotImplementedError(this.name, "Recreates managed instance.");
   }
 
   async destroy(_instanceId: string): Promise<void> {
-    throw new NotImplementedError(this.name, 'De-provisions managed instance.');
+    throw new NotImplementedError(this.name, "De-provisions managed instance.");
   }
 }

@@ -8,7 +8,6 @@
 name: capsule-control-plane
 
 services:
-
   # ── nginx edge proxy (TLS termination + routing) ─────────────────────────
   nginx:
     image: nginx:1.27-alpine
@@ -74,7 +73,8 @@ services:
   dashboard-init:
     image: "${ECR_REGISTRY}/capsule/dashboard:${IMAGE_TAG}"
     restart: "no"
-    entrypoint: ["/bin/sh", "-c", "cp -r /usr/share/nginx/html/. /dashboard-out/"]
+    entrypoint:
+      ["/bin/sh", "-c", "cp -r /usr/share/nginx/html/. /dashboard-out/"]
     volumes:
       - dashboard_static:/dashboard-out
     networks: []

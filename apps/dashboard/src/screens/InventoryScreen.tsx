@@ -47,12 +47,12 @@ export const InventoryScreen: React.FC<InventoryScreenProps> = ({ currentUser, o
 
   useEffect(() => {
     fetchInventory();
-  }, [currentUser.organizationId]);
+  }, [currentUser.organization_id]);
 
   const fetchInventory = async () => {
     try {
       setLoading(true);
-      const res = await api.getInventory(currentUser.organizationId);
+      const res = await api.getInventory(currentUser.organization_id);
       setItems(res.items || []);
       setTotal(res.total || 0);
     } catch (err: any) {
@@ -64,12 +64,12 @@ export const InventoryScreen: React.FC<InventoryScreenProps> = ({ currentUser, o
 
   const handleExportCsv = async () => {
     try {
-      const csvText = await api.exportInventoryCsv(currentUser.organizationId);
+      const csvText = await api.exportInventoryCsv(currentUser.organization_id);
       const blob = new Blob([csvText], { type: 'text/csv' });
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `inventory-${currentUser.organizationId}-${new Date().toISOString().slice(0, 10)}.csv`;
+      a.download = `inventory-${currentUser.organization_id}-${new Date().toISOString().slice(0, 10)}.csv`;
       a.click();
       window.URL.revokeObjectURL(url);
     } catch (err: any) {
@@ -78,12 +78,12 @@ export const InventoryScreen: React.FC<InventoryScreenProps> = ({ currentUser, o
   };
 
   const handleExportJson = () => {
-    const jsonText = JSON.stringify({ organization_id: currentUser.organizationId, items, total }, null, 2);
+    const jsonText = JSON.stringify({ organization_id: currentUser.organization_id, items, total }, null, 2);
     const blob = new Blob([jsonText], { type: 'application/json' });
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `inventory-${currentUser.organizationId}-${new Date().toISOString().slice(0, 10)}.json`;
+    a.download = `inventory-${currentUser.organization_id}-${new Date().toISOString().slice(0, 10)}.json`;
     a.click();
     window.URL.revokeObjectURL(url);
   };
@@ -92,7 +92,7 @@ export const InventoryScreen: React.FC<InventoryScreenProps> = ({ currentUser, o
     try {
       setRunningCycle(true);
       setCycleNotice(null);
-      const res = await api.runGovernanceCycle(currentUser.organizationId);
+      const res = await api.runGovernanceCycle(currentUser.organization_id);
       const s = res.stats || {};
       setCycleNotice(
         `Cycle evaluated: ${s.grace_periods_expired || 0} grace periods expired, ${s.warnings_sent || 0} warnings sent, ${s.archived_count || 0} apps archived, ${s.purged_count || 0} purged.`
@@ -175,7 +175,7 @@ export const InventoryScreen: React.FC<InventoryScreenProps> = ({ currentUser, o
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          {currentUser.platformRole === 'owner' && (
+          {currentUser.platform_role === 'owner' && (
             <button
               onClick={handleRunGovernanceCycle}
               disabled={runningCycle}

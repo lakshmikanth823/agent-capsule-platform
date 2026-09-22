@@ -1,4 +1,4 @@
-import crypto from 'node:crypto';
+import crypto from "node:crypto";
 
 export interface IdentityContext {
   userId: string;
@@ -17,9 +17,12 @@ export interface IdentityContext {
 }
 
 export class IdentityVerificationError extends Error {
-  constructor(message: string, public readonly code: string) {
+  constructor(
+    message: string,
+    public readonly code: string,
+  ) {
     super(message);
-    this.name = 'IdentityVerificationError';
+    this.name = "IdentityVerificationError";
   }
 }
 
@@ -32,37 +35,41 @@ export interface VerifyIdentityOptions {
 }
 
 function base64UrlDecode(str: string): string {
-  let base64 = str.replace(/-/g, '+').replace(/_/g, '/');
+  let base64 = str.replace(/-/g, "+").replace(/_/g, "/");
   while (base64.length % 4 !== 0) {
-    base64 += '=';
+    base64 += "=";
   }
-  return Buffer.from(base64, 'base64').toString('utf8');
+  return Buffer.from(base64, "base64").toString("utf8");
 }
 
 function base64UrlEncode(data: Buffer): string {
   return data
-    .toString('base64')
-    .replace(/=/g, '')
-    .replace(/\+/g, '-')
-    .replace(/\//g, '_');
+    .toString("base64")
+    .replace(/=/g, "")
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_");
 }
 
-export function createIdentityContext(payload: Record<string, any>): IdentityContext {
+export function createIdentityContext(
+  payload: Record<string, any>,
+): IdentityContext {
   const roles = Array.isArray(payload.roles) ? payload.roles : [];
   const groups = Array.isArray(payload.groups) ? payload.groups : [];
-  const sub = payload.sub || payload.userId || '';
-  const orgId = payload.org_id || payload.orgId || '';
+  const sub = payload.sub || payload.userId || "";
+  const orgId = payload.org_id || payload.orgId || "";
 
   return {
     userId: sub,
     sub,
     orgId,
     org_id: orgId,
-    email: payload.email || '',
+    email: payload.email || "",
     groups,
     roles,
     issuedAt: payload.iat ? new Date(payload.iat * 1000) : new Date(),
-    expiresAt: payload.exp ? new Date(payload.exp * 1000) : new Date(Date.now() + 3600_000),
+    expiresAt: payload.exp
+      ? new Date(payload.exp * 1000)
+      : new Date(Date.now() + 3600_000),
     raw: payload,
     hasRole(role: string): boolean {
       return roles.includes(role);
@@ -81,18 +88,18 @@ export function createIdentityContext(payload: Record<string, any>): IdentityCon
  */
 function extractHeader(reqOrToken: any): string | null {
   if (!reqOrToken) return null;
-  if (typeof reqOrToken === 'string') return reqOrToken;
+  if (typeof reqOrToken === "string") return reqOrToken;
 
   // Web standard Request object (req.headers.get)
-  if (reqOrToken.headers && typeof reqOrToken.headers.get === 'function') {
-    return reqOrToken.headers.get('x-capsule-identity');
+  if (reqOrToken.headers && typeof reqOrToken.headers.get === "function") {
+    return reqOrToken.headers.get("x-capsule-identity");
   }
 
   // Node IncomingMessage / Express req (req.headers['x-capsule-identity'])
-  if (reqOrToken.headers && typeof reqOrToken.headers === 'object') {
+  if (reqOrToken.headers && typeof reqOrToken.headers === "object") {
     return (
-      reqOrToken.headers['x-capsule-identity'] ||
-      reqOrToken.headers['X-Capsule-Identity'] ||
+      reqOrToken.headers["x-capsule-identity"] ||
+      reqOrToken.headers["X-Capsule-Identity"] ||
       null
     );
   }
@@ -106,12 +113,12 @@ function extractHeader(reqOrToken: any): string | null {
  */
 export function getIdentity(
   reqOrToken: any,
-  options: VerifyIdentityOptions = {}
+  options: VerifyIdentityOptions = {},
 ): IdentityContext | null {
   const token = extractHeader(reqOrToken);
 
   // Check for local emulator mode (strictly requires explicit CAPSULE_EMULATOR=true)
-  const isEmulator = process.env.CAPSULE_EMULATOR === 'true';
+  const isEmulator = process.env.CAPSULE_EMULATOR === "true";
 
   if (!token) {
     if (isEmulator) {
@@ -119,8 +126,8 @@ export function getIdentity(
     }
     if (options.throwOnError) {
       throw new IdentityVerificationError(
-        'Missing identity header x-capsule-identity',
-        'MISSING_IDENTITY'
+        "Missing identity header x-capsule-identity",
+        "MISSING_IDENTITY",
       );
     }
     return null;
@@ -128,19 +135,23 @@ export function getIdentity(
 
   // In strict production mode, raw unsigned JSON headers are rejected.
   // In dev/test environments, raw JSON is permitted for backward-compatibility with Prompt 01 curl flows.
-  if (token.trim().startsWith('{')) {
-    if (process.env.STRICT_IDENTITY === 'true') {
+  if (token.trim().startsWith("{")) {
+    if (process.env.STRICT_IDENTITY === "true") {
       if (options.throwOnError) {
         throw new IdentityVerificationError(
-          'Unsigned identity header rejected in strict production mode: a valid signed JWT is required.',
-          'UNSIGNED_IDENTITY_REJECTED'
+          "Unsigned identity header rejected in strict production mode: a valid signed JWT is required.",
+          "UNSIGNED_IDENTITY_REJECTED",
         );
       }
       return null;
     }
     try {
       const parsed = JSON.parse(token);
-      if (parsed && typeof parsed === 'object' && (parsed.sub || parsed.userId)) {
+      if (
+        parsed &&
+        typeof parsed === "object" &&
+        (parsed.sub || parsed.userId)
+      ) {
         return createIdentityContext(parsed);
       }
     } catch {
@@ -149,12 +160,12 @@ export function getIdentity(
   }
 
   // Split JWT parts
-  const parts = token.split('.');
+  const parts = token.split(".");
   if (parts.length !== 3) {
     if (options.throwOnError) {
       throw new IdentityVerificationError(
-        'Malformed identity token: expected 3 parts',
-        'MALFORMED_TOKEN'
+        "Malformed identity token: expected 3 parts",
+        "MALFORMED_TOKEN",
       );
     }
     return null;
@@ -171,19 +182,19 @@ export function getIdentity(
   } catch {
     if (options.throwOnError) {
       throw new IdentityVerificationError(
-        'Invalid JSON in identity token header or payload',
-        'INVALID_JSON'
+        "Invalid JSON in identity token header or payload",
+        "INVALID_JSON",
       );
     }
     return null;
   }
 
   // Check algorithm
-  if (header.alg !== 'HS256') {
+  if (header.alg !== "HS256") {
     if (options.throwOnError) {
       throw new IdentityVerificationError(
         `Unsupported algorithm ${header.alg}: expected HS256`,
-        'UNSUPPORTED_ALGORITHM'
+        "UNSUPPORTED_ALGORITHM",
       );
     }
     return null;
@@ -207,8 +218,8 @@ export function getIdentity(
     }
     if (options.throwOnError) {
       throw new IdentityVerificationError(
-        'No verification secret configured for identity verification',
-        'NO_SECRET_CONFIGURED'
+        "No verification secret configured for identity verification",
+        "NO_SECRET_CONFIGURED",
       );
     }
     return null;
@@ -217,7 +228,7 @@ export function getIdentity(
   // Verify HMAC-SHA256 signature
   const dataToSign = `${encodedHeader}.${encodedPayload}`;
   const expectedSig = crypto
-    .createHmac('sha256', secret)
+    .createHmac("sha256", secret)
     .update(dataToSign)
     .digest();
   const expectedEncodedSig = base64UrlEncode(expectedSig);
@@ -231,8 +242,8 @@ export function getIdentity(
     ) {
       if (options.throwOnError) {
         throw new IdentityVerificationError(
-          'Invalid identity token signature',
-          'INVALID_SIGNATURE'
+          "Invalid identity token signature",
+          "INVALID_SIGNATURE",
         );
       }
       return null;
@@ -241,19 +252,19 @@ export function getIdentity(
     if (err instanceof IdentityVerificationError) throw err;
     if (options.throwOnError) {
       throw new IdentityVerificationError(
-        'Signature verification failed',
-        'INVALID_SIGNATURE'
+        "Signature verification failed",
+        "INVALID_SIGNATURE",
       );
     }
     return null;
   }
 
   // Verify issuer
-  if (payload.iss !== 'platform') {
+  if (payload.iss !== "platform") {
     if (options.throwOnError) {
       throw new IdentityVerificationError(
         `Invalid issuer '${payload.iss}': expected 'platform'`,
-        'INVALID_ISSUER'
+        "INVALID_ISSUER",
       );
     }
     return null;
@@ -262,14 +273,16 @@ export function getIdentity(
   // Verify audience if specified or present in environment
   const expectedAud =
     options.audience ||
-    (process.env.CAPSULE_ID ? `capsule:${process.env.CAPSULE_ID}` : undefined) ||
+    (process.env.CAPSULE_ID
+      ? `capsule:${process.env.CAPSULE_ID}`
+      : undefined) ||
     (process.env.APP_ID ? `capsule:${process.env.APP_ID}` : undefined);
 
   if (expectedAud && payload.aud !== expectedAud) {
     if (options.throwOnError) {
       throw new IdentityVerificationError(
         `Audience mismatch: token audience '${payload.aud}' does not match expected '${expectedAud}'`,
-        'AUDIENCE_MISMATCH'
+        "AUDIENCE_MISMATCH",
       );
     }
     return null;
@@ -278,12 +291,12 @@ export function getIdentity(
   // Verify expiration
   const tolerance = options.clockToleranceSeconds || 10;
   const nowSeconds = Math.floor(Date.now() / 1000);
-  if (payload.exp && typeof payload.exp === 'number') {
+  if (payload.exp && typeof payload.exp === "number") {
     if (nowSeconds >= payload.exp + tolerance) {
       if (options.throwOnError) {
         throw new IdentityVerificationError(
           `Identity token expired at ${new Date(payload.exp * 1000).toISOString()}`,
-          'TOKEN_EXPIRED'
+          "TOKEN_EXPIRED",
         );
       }
       return null;
@@ -298,13 +311,13 @@ export function getIdentity(
  */
 export function requireIdentity(
   reqOrToken: any,
-  options: Omit<VerifyIdentityOptions, 'throwOnError'> = {}
+  options: Omit<VerifyIdentityOptions, "throwOnError"> = {},
 ): IdentityContext {
   const identity = getIdentity(reqOrToken, { ...options, throwOnError: true });
   if (!identity) {
     throw new IdentityVerificationError(
-      'Authentication required',
-      'UNAUTHENTICATED'
+      "Authentication required",
+      "UNAUTHENTICATED",
     );
   }
   return identity;
@@ -334,13 +347,13 @@ function getPlatformKeys(): Record<string, string> {
  */
 export function getEmulatorIdentity(): IdentityContext {
   return createIdentityContext({
-    iss: 'platform',
-    aud: 'capsule:local-dev',
-    sub: 'dev-user-001',
-    org_id: 'dev-org-001',
-    email: 'developer@example.com',
-    groups: ['engineering'],
-    roles: ['employee', 'manager', 'hr'],
+    iss: "platform",
+    aud: "capsule:local-dev",
+    sub: "dev-user-001",
+    org_id: "dev-org-001",
+    email: "developer@example.com",
+    groups: ["engineering"],
+    roles: ["employee", "manager", "hr"],
     iat: Math.floor(Date.now() / 1000),
     exp: Math.floor(Date.now() / 1000) + 86400,
   });

@@ -10,10 +10,10 @@
  * - Hardened OCI execution: Non-root user (1000:1000), read-only rootfs, dropped capabilities,
  *   no-new-privileges, restricted tmpfs mounts, cgroups v2 resource ceilings.
  */
-import { execFile } from 'node:child_process';
-import { promisify } from 'node:util';
-import path from 'node:path';
-import fs from 'node:fs/promises';
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
+import path from "node:path";
+import fs from "node:fs/promises";
 import type {
   SandboxDriver,
   SandboxSpec,
@@ -23,36 +23,40 @@ import type {
   ForwardRequest,
   ForwardResponse,
   ColdStartStats,
-} from '../interface.js';
+} from "../interface.js";
 
 const execFileAsync = promisify(execFile);
 
 export interface GVisorDriverOptions {
   runtimeName?: string;
-  platform?: 'ptrace' | 'kvm';
-  networkMode?: 'none' | 'bridge';
+  platform?: "ptrace" | "kvm";
+  networkMode?: "none" | "bridge";
 }
 
 export class GVisorDriver implements SandboxDriver {
-  readonly name = 'gvisor';
+  readonly name = "gvisor";
   private runtimeName: string;
-  private platform: 'ptrace' | 'kvm';
+  private platform: "ptrace" | "kvm";
   private instances = new Map<string, SandboxInstance>();
   private coldStartSamples: number[] = [];
 
   constructor(options: GVisorDriverOptions = {}) {
-    this.runtimeName = options.runtimeName || process.env.GVISOR_RUNTIME || 'runsc';
-    this.platform = options.platform || (process.env.GVISOR_PLATFORM as 'ptrace' | 'kvm') || 'ptrace';
+    this.runtimeName =
+      options.runtimeName || process.env.GVISOR_RUNTIME || "runsc";
+    this.platform =
+      options.platform ||
+      (process.env.GVISOR_PLATFORM as "ptrace" | "kvm") ||
+      "ptrace";
   }
 
   private normalizePathForDocker(p: string): string {
-    return path.resolve(p).replace(/\\/g, '/');
+    return path.resolve(p).replace(/\\/g, "/");
   }
 
   private parseCpuLimit(cpu?: string): string {
-    if (!cpu || cpu === 'small') return '0.5';
-    if (cpu === 'medium') return '1.0';
-    if (cpu === 'large') return '2.0';
+    if (!cpu || cpu === "small") return "0.5";
+    if (cpu === "medium") return "1.0";
+    if (cpu === "large") return "2.0";
     return cpu;
   }
 
@@ -61,16 +65,16 @@ export class GVisorDriver implements SandboxDriver {
    */
   async isAvailable(): Promise<boolean> {
     try {
-      const { stdout } = await execFileAsync('docker', [
-        'info',
-        '--format',
-        '{{json .Runtimes}}',
+      const { stdout } = await execFileAsync("docker", [
+        "info",
+        "--format",
+        "{{json .Runtimes}}",
       ]);
-      const runtimes = JSON.parse(stdout.trim() || '{}');
+      const runtimes = JSON.parse(stdout.trim() || "{}");
       return (
         Boolean(runtimes[this.runtimeName]) ||
-        Boolean(runtimes['runsc']) ||
-        Boolean(runtimes['io.containerd.runsc.v1'])
+        Boolean(runtimes["runsc"]) ||
+        Boolean(runtimes["io.containerd.runsc.v1"])
       );
     } catch {
       return false;
@@ -81,11 +85,14 @@ export class GVisorDriver implements SandboxDriver {
    * Constructs the hardened Docker/runsc CLI execution arguments for a sandbox specification.
    * Useful for unit testing, dry-run validation, and security auditing.
    */
-  async buildExecutionArgs(spec: SandboxSpec, instanceId: string): Promise<string[]> {
+  async buildExecutionArgs(
+    spec: SandboxSpec,
+    instanceId: string,
+  ): Promise<string[]> {
     const cpuLimit = this.parseCpuLimit(spec.limits?.cpu);
     const memoryMb = spec.limits?.memoryMb || 256;
     const pidsLimit = spec.limits?.pidsLimit || 64;
-    const networkMode = spec.networkMode || 'none';
+    const networkMode = spec.networkMode || "none";
 
     const normalizedAppDir = this.normalizePathForDocker(spec.bundlePath);
 
@@ -95,93 +102,115 @@ export class GVisorDriver implements SandboxDriver {
       50;
 
     const dockerArgs = [
-      'run',
-      '-d',
-      '--name', instanceId,
+      "run",
+      "-d",
+      "--name",
+      instanceId,
       // 1. gVisor Sentry OCI Runtime
-      '--runtime', this.runtimeName,
+      "--runtime",
+      this.runtimeName,
       // Pass gVisor platform configuration
       `--runtime-flag=--platform=${this.platform}`,
       // 2. Non-root user (node user UID 1000 in node:22-alpine)
-      '--user', '1000:1000',
+      "--user",
+      "1000:1000",
       // 3. Read-only root filesystem
-      '--read-only',
+      "--read-only",
       // 4. Dropped Linux capabilities & prevent privilege escalation
-      '--cap-drop=ALL',
-      '--security-opt', 'no-new-privileges:true',
+      "--cap-drop=ALL",
+      "--security-opt",
+      "no-new-privileges:true",
       // 5. Temporary writable scratch spaces (noexec, nosuid, bounded size)
-      '--tmpfs', '/tmp:rw,noexec,nosuid,size=64m',
-      '--tmpfs', '/run:rw,noexec,nosuid,size=16m',
+      "--tmpfs",
+      "/tmp:rw,noexec,nosuid,size=64m",
+      "--tmpfs",
+      "/run:rw,noexec,nosuid,size=16m",
       // 6. Application code bundle mounted strictly read-only
-      '-v', `${normalizedAppDir}:/app:ro`,
+      "-v",
+      `${normalizedAppDir}:/app:ro`,
     ];
 
     // Mount writable /data only if dataDir is provided (sqlite / blobs capability)
     if (spec.dataDir) {
       const normalizedDataDir = this.normalizePathForDocker(spec.dataDir);
-      dockerArgs.push('-v', `${normalizedDataDir}:/data:rw`);
+      dockerArgs.push("-v", `${normalizedDataDir}:/data:rw`);
     }
 
     // 7. Per-instance resource limits (cgroups v2 + Sentry memory limits)
     dockerArgs.push(
-      '--cpus', cpuLimit,
-      '--memory', `${memoryMb}m`,
-      '--memory-swap', `${memoryMb}m`,
-      '--pids-limit', String(pidsLimit)
+      "--cpus",
+      cpuLimit,
+      "--memory",
+      `${memoryMb}m`,
+      "--memory-swap",
+      `${memoryMb}m`,
+      "--pids-limit",
+      String(pidsLimit),
     );
 
     // 8. User-space Netstack network isolation
-    dockerArgs.push('--network', networkMode);
-    if (networkMode === 'none') {
-      dockerArgs.push('--runtime-flag=--network=none');
+    dockerArgs.push("--network", networkMode);
+    if (networkMode === "none") {
+      dockerArgs.push("--runtime-flag=--network=none");
     }
 
     // 9. Environment variables and runtime configuration
     dockerArgs.push(
-      '-w', '/app',
-      '-e', 'NODE_ENV=production',
-      '-e', 'PORT=3000',
-      '-e', `CAPSULE_ID=${spec.capsuleId}`,
-      '-e', `APP_ID=${spec.appKey}`
+      "-w",
+      "/app",
+      "-e",
+      "NODE_ENV=production",
+      "-e",
+      "PORT=3000",
+      "-e",
+      `CAPSULE_ID=${spec.capsuleId}`,
+      "-e",
+      `APP_ID=${spec.appKey}`,
     );
 
     if (spec.dataDir) {
       dockerArgs.push(
-        '-e', 'DATABASE_PATH=/data/app.sqlite',
-        '-e', 'CAPSULE_BLOB_DIR=/data/blobs',
-        '-e', `DB_MAX_SIZE_MB=${dbMaxSizeMb}`
+        "-e",
+        "DATABASE_PATH=/data/app.sqlite",
+        "-e",
+        "CAPSULE_BLOB_DIR=/data/blobs",
+        "-e",
+        `DB_MAX_SIZE_MB=${dbMaxSizeMb}`,
       );
     }
 
     if (process.env.CAPSULE_IDENTITY_SECRET) {
-      dockerArgs.push('-e', `CAPSULE_IDENTITY_SECRET=${process.env.CAPSULE_IDENTITY_SECRET}`);
+      dockerArgs.push(
+        "-e",
+        `CAPSULE_IDENTITY_SECRET=${process.env.CAPSULE_IDENTITY_SECRET}`,
+      );
     }
 
     if (spec.env) {
       for (const [key, value] of Object.entries(spec.env)) {
-        dockerArgs.push('-e', `${key}=${value}`);
+        dockerArgs.push("-e", `${key}=${value}`);
       }
     }
 
-    if (networkMode === 'bridge' && spec.port) {
-      dockerArgs.push('-p', `127.0.0.1:${spec.port}:3000`);
+    if (networkMode === "bridge" && spec.port) {
+      dockerArgs.push("-p", `127.0.0.1:${spec.port}:3000`);
     }
 
     // Determine entrypoint: dist/index.js, src/index.js, or index.js
-    let entrypoint = 'dist/index.js';
+    let entrypoint = "dist/index.js";
     try {
-      await fs.access(path.join(spec.bundlePath, 'dist', 'index.js'));
-      entrypoint = 'dist/index.js';
+      await fs.access(path.join(spec.bundlePath, "dist", "index.js"));
+      entrypoint = "dist/index.js";
     } catch {
       try {
-        await fs.access(path.join(spec.bundlePath, 'src', 'index.js'));
-        entrypoint = 'src/index.js';
+        await fs.access(path.join(spec.bundlePath, "src", "index.js"));
+        entrypoint = "src/index.js";
       } catch {
-        entrypoint = 'index.js';
+        entrypoint = "index.js";
       }
     }
 
-    dockerArgs.push('node:22-alpine', 'node', entrypoint);
+    dockerArgs.push("node:22-alpine", "node", entrypoint);
     return dockerArgs;
   }
 
@@ -191,7 +220,7 @@ export class GVisorDriver implements SandboxDriver {
     // Ensure data directory exists on host if dataDir is specified
     if (spec.dataDir) {
       await fs.mkdir(spec.dataDir, { recursive: true });
-      await fs.mkdir(path.join(spec.dataDir, 'blobs'), { recursive: true });
+      await fs.mkdir(path.join(spec.dataDir, "blobs"), { recursive: true });
     }
 
     const dockerArgs = await this.buildExecutionArgs(spec, instanceId);
@@ -201,19 +230,19 @@ export class GVisorDriver implements SandboxDriver {
     if (!available && !process.env.ALLOW_DEV_FALLBACK) {
       throw new Error(
         `[GVisorDriver] gVisor runtime '${this.runtimeName}' is not configured in Docker daemon. ` +
-        `Install gVisor runsc (https://gvisor.dev/docs/user_guide/install/) and register it in /etc/docker/daemon.json, ` +
-        `or set ALLOW_DEV_FALLBACK=1 for local development testing.`
+          `Install gVisor runsc (https://gvisor.dev/docs/user_guide/install/) and register it in /etc/docker/daemon.json, ` +
+          `or set ALLOW_DEV_FALLBACK=1 for local development testing.`,
       );
     }
 
     // If fallback is enabled in dev environment, replace --runtime runsc with default runc
     if (!available && process.env.ALLOW_DEV_FALLBACK) {
-      const rtIndex = dockerArgs.indexOf('--runtime');
+      const rtIndex = dockerArgs.indexOf("--runtime");
       if (rtIndex !== -1) {
         dockerArgs.splice(rtIndex, 2);
       }
       const flagIndices = dockerArgs
-        .map((arg, idx) => (arg.startsWith('--runtime-flag') ? idx : -1))
+        .map((arg, idx) => (arg.startsWith("--runtime-flag") ? idx : -1))
         .filter((idx) => idx !== -1)
         .reverse();
       for (const idx of flagIndices) {
@@ -223,14 +252,14 @@ export class GVisorDriver implements SandboxDriver {
 
     const startTimestamp = Date.now();
     try {
-      await execFileAsync('docker', dockerArgs);
+      await execFileAsync("docker", dockerArgs);
 
       const now = new Date();
       const instance: SandboxInstance = {
         id: instanceId,
         capsuleId: spec.capsuleId,
         versionId: spec.versionId,
-        status: 'running',
+        status: "running",
         spec,
         assignedPort: spec.port,
         createdAt: now,
@@ -247,23 +276,28 @@ export class GVisorDriver implements SandboxDriver {
 
       return instance;
     } catch (err: any) {
-      let containerLogs = '';
+      let containerLogs = "";
       try {
         const logsArr = await this.logs(instanceId);
-        containerLogs = logsArr.join('\n');
+        containerLogs = logsArr.join("\n");
       } catch {}
       await this.destroy(instanceId).catch(() => {});
-      throw new Error(`Failed to start gVisor sandbox ${instanceId}: ${err.message || err}. Container logs: ${containerLogs}`);
+      throw new Error(
+        `Failed to start gVisor sandbox ${instanceId}: ${err.message || err}. Container logs: ${containerLogs}`,
+      );
     }
   }
 
-  private async waitForReady(instanceId: string, timeoutMs: number): Promise<void> {
+  private async waitForReady(
+    instanceId: string,
+    timeoutMs: number,
+  ): Promise<void> {
     const startTime = Date.now();
     while (Date.now() - startTime < timeoutMs) {
       try {
         const resp = await this.forwardRequest(instanceId, {
-          method: 'GET',
-          path: '/health',
+          method: "GET",
+          path: "/health",
         });
         if (resp.statusCode === 200) {
           return;
@@ -273,92 +307,111 @@ export class GVisorDriver implements SandboxDriver {
       }
       await new Promise((resolve) => setTimeout(resolve, 300));
     }
-    throw new Error(`gVisor Sandbox ${instanceId} failed to become ready within ${timeoutMs}ms.`);
+    throw new Error(
+      `gVisor Sandbox ${instanceId} failed to become ready within ${timeoutMs}ms.`,
+    );
   }
 
   async stop(instanceId: string): Promise<void> {
     try {
-      await execFileAsync('docker', ['stop', '-t', '2', instanceId]);
+      await execFileAsync("docker", ["stop", "-t", "2", instanceId]);
       const inst = this.instances.get(instanceId);
-      if (inst) inst.status = 'stopped';
+      if (inst) inst.status = "stopped";
     } catch (err: any) {
-      throw new Error(`Failed to stop gVisor sandbox ${instanceId}: ${err.message}`);
+      throw new Error(
+        `Failed to stop gVisor sandbox ${instanceId}: ${err.message}`,
+      );
     }
   }
 
   async suspend(instanceId: string): Promise<void> {
     try {
       // Fast pause via cgroups v2 freezer
-      await execFileAsync('docker', ['pause', instanceId]);
+      await execFileAsync("docker", ["pause", instanceId]);
       const inst = this.instances.get(instanceId);
-      if (inst) inst.status = 'suspended';
+      if (inst) inst.status = "suspended";
     } catch (err: any) {
-      throw new Error(`Failed to suspend gVisor sandbox ${instanceId}: ${err.message}`);
+      throw new Error(
+        `Failed to suspend gVisor sandbox ${instanceId}: ${err.message}`,
+      );
     }
   }
 
   async resume(instanceId: string): Promise<void> {
     try {
       // Fast unpause via cgroups v2 freezer
-      await execFileAsync('docker', ['unpause', instanceId]);
+      await execFileAsync("docker", ["unpause", instanceId]);
       const inst = this.instances.get(instanceId);
       if (inst) {
-        inst.status = 'running';
+        inst.status = "running";
         inst.lastActiveAt = new Date();
       }
     } catch (err: any) {
-      throw new Error(`Failed to resume gVisor sandbox ${instanceId}: ${err.message}`);
+      throw new Error(
+        `Failed to resume gVisor sandbox ${instanceId}: ${err.message}`,
+      );
     }
   }
 
   async status(instanceId: string): Promise<SandboxStatus> {
     try {
-      const { stdout } = await execFileAsync('docker', [
-        'inspect',
-        '--format',
-        '{{json .State}}',
+      const { stdout } = await execFileAsync("docker", [
+        "inspect",
+        "--format",
+        "{{json .State}}",
         instanceId,
       ]);
       const state = JSON.parse(stdout.trim());
 
-      let status: SandboxStatus = 'stopped';
+      let status: SandboxStatus = "stopped";
       if (state.Paused) {
-        status = 'suspended';
+        status = "suspended";
       } else if (state.Running) {
-        status = 'running';
-      } else if (state.OOMKilled || (state.ExitCode !== 0 && state.ExitCode !== 143 && state.ExitCode !== 137)) {
-        status = 'crashed';
+        status = "running";
+      } else if (
+        state.OOMKilled ||
+        (state.ExitCode !== 0 &&
+          state.ExitCode !== 143 &&
+          state.ExitCode !== 137)
+      ) {
+        status = "crashed";
       } else {
-        status = 'stopped';
+        status = "stopped";
       }
 
       const inst = this.instances.get(instanceId);
       if (inst) inst.status = status;
       return status;
     } catch {
-      return 'stopped';
+      return "stopped";
     }
   }
 
   async logs(instanceId: string, options?: LogOptions): Promise<string[]> {
-    const args = ['logs'];
+    const args = ["logs"];
     if (options?.tail) {
-      args.push('--tail', String(options.tail));
+      args.push("--tail", String(options.tail));
     }
     args.push(instanceId);
 
     try {
-      const { stdout, stderr } = await execFileAsync('docker', args);
-      const output = (stdout + '\n' + stderr).trim();
-      return output ? output.split('\n') : [];
+      const { stdout, stderr } = await execFileAsync("docker", args);
+      const output = (stdout + "\n" + stderr).trim();
+      return output ? output.split("\n") : [];
     } catch (err: any) {
-      throw new Error(`Failed to read logs for gVisor sandbox ${instanceId}: ${err.message}`);
+      throw new Error(
+        `Failed to read logs for gVisor sandbox ${instanceId}: ${err.message}`,
+      );
     }
   }
 
-  async forwardRequest(instanceId: string, req: ForwardRequest): Promise<ForwardResponse> {
+  async forwardRequest(
+    instanceId: string,
+    req: ForwardRequest,
+  ): Promise<ForwardResponse> {
     const inst = this.instances.get(instanceId);
-    if (!inst) throw new Error(`gVisor Sandbox ${instanceId} is not tracked by driver.`);
+    if (!inst)
+      throw new Error(`gVisor Sandbox ${instanceId} is not tracked by driver.`);
 
     inst.lastActiveAt = new Date();
 
@@ -366,19 +419,19 @@ export class GVisorDriver implements SandboxDriver {
       method: req.method,
       path: req.path,
       headers: req.headers || {},
-      body: req.body || '',
+      body: req.body || "",
     });
 
     const bridgeScript =
       "const http=require('http');const reqData=JSON.parse(process.argv[1]);const options={hostname:'127.0.0.1',port:3000,path:reqData.path,method:reqData.method,headers:reqData.headers};const clientReq=http.request(options,(res)=>{let body='';res.on('data',d=>body+=d);res.on('end',()=>{console.log(JSON.stringify({statusCode:res.statusCode,headers:res.headers,body}));});});clientReq.on('error',(e)=>{console.error('BRIDGE_ERROR:'+e.message);process.exit(1);});if(reqData.body)clientReq.write(reqData.body);clientReq.end();";
 
     try {
-      const { stdout } = await execFileAsync('docker', [
-        'exec',
-        '-i',
+      const { stdout } = await execFileAsync("docker", [
+        "exec",
+        "-i",
         instanceId,
-        'node',
-        '-e',
+        "node",
+        "-e",
         bridgeScript,
         payload,
       ]);
@@ -390,7 +443,9 @@ export class GVisorDriver implements SandboxDriver {
         body: result.body,
       };
     } catch (err: any) {
-      throw new Error(`Failed to forward HTTP request to gVisor sandbox ${instanceId}: ${err.message}`);
+      throw new Error(
+        `Failed to forward HTTP request to gVisor sandbox ${instanceId}: ${err.message}`,
+      );
     }
   }
 
@@ -405,7 +460,7 @@ export class GVisorDriver implements SandboxDriver {
 
   async destroy(instanceId: string): Promise<void> {
     try {
-      await execFileAsync('docker', ['rm', '-f', instanceId]);
+      await execFileAsync("docker", ["rm", "-f", instanceId]);
     } catch {
       // Ignore if already removed
     } finally {
@@ -463,4 +518,3 @@ export class GVisorDriver implements SandboxDriver {
     };
   }
 }
-

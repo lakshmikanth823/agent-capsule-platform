@@ -27,7 +27,7 @@ export class CliError extends Error {
     details?: any;
   }) {
     super(options.message);
-    this.name = 'CliError';
+    this.name = "CliError";
     this.code = options.code;
     this.exitCode = options.exitCode ?? 1;
     this.field = options.field;
@@ -42,15 +42,15 @@ export class CliError extends Error {
 export function outputResult(
   data: any,
   options: { json?: boolean } = {},
-  humanMessage?: string | (() => void)
+  humanMessage?: string | (() => void),
 ): void {
   if (options.json) {
     console.log(JSON.stringify(data, null, 2));
-  } else if (typeof humanMessage === 'function') {
+  } else if (typeof humanMessage === "function") {
     humanMessage();
   } else if (humanMessage) {
     console.log(humanMessage);
-  } else if (typeof data === 'string') {
+  } else if (typeof data === "string") {
     console.log(data);
   } else {
     console.log(JSON.stringify(data, null, 2));
@@ -63,9 +63,9 @@ export function outputResult(
 export function outputError(
   err: any,
   options: { json?: boolean } = {},
-  defaultExitCode = 1
+  defaultExitCode = 1,
 ): never {
-  const code = err?.code || 'UNKNOWN_ERROR';
+  const code = err?.code || "UNKNOWN_ERROR";
   const message = err?.message || String(err);
   const field = err?.field || null;
   const hint = err?.hint || undefined;

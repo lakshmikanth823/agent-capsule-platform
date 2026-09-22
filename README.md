@@ -62,32 +62,38 @@ Every capsule executes inside a **hardened user-space sandbox** with its own ded
 ## ✨ Key Capabilities
 
 ### 🛡️ 1. Multi-Tenant Kernel Isolation (gVisor)
+
 - **Zero Host Syscalls:** Sandboxes run under Google's **gVisor (`runsc`)** user-space kernel (Sentry), preventing container breakout and kernel privilege escalation.
 - **Defense in Depth:** `--read-only` root filesystem, `--cap-drop=ALL`, `--no-new-privileges`, and `--pids-limit 64` (fork-bomb defense).
 - **Default-Deny Networking:** Sandboxes start with `--network none`. Inbound requests enter via a controlled proxy bridge; outbound traffic must pass through the Egress Proxy.
 
 ### 🌐 2. Egress Proxy & SSRF Protection
+
 - **Allowlist Enforced:** Outbound HTTP/HTTPS requests are strictly filtered against domains declared in the capsule's `capsule.manifest.yaml`.
 - **Pre-Connection SSRF Defense:** DNS resolution pins IP addresses before connection. Prohibits cloud metadata endpoints (`169.254.169.254`), private RFC 1918 subnets, loopback, and DNS rebinding attacks.
 
 ### 🤖 3. Centralized AI Gateway
+
 - **Zero Credential Exposure:** Capsules invoke LLMs (OpenAI, Gemini, Anthropic) via the `@capsule/sdk`. Provider API keys reside exclusively in the platform and are never exposed to apps.
 - **Budget Hard Stops:** Per-app monthly cost caps enforced in real-time with fail-closed `429 BUDGET_EXCEEDED` errors.
 - **Model Allowlists:** Controls which models an organization allows per Environment Profile.
 - **Privacy Logging:** Content logging is strictly opt-in; only token counts and metadata are stored by default.
 
 ### 🔌 4. Model Context Protocol (MCP) Adapter
+
 - Built with the official **MCP TypeScript SDK** (`@capsule/mcp-server`).
 - Exposes 9 platform tools (`validate_manifest`, `publish`, `share`, `unshare`, `status`, `logs`, `versions`, `rollback`, `get_agent_guide`) over `stdio` and `HTTP/SSE`.
 - Direct integration guides for **Claude Desktop**, **Cursor**, and **Antigravity**.
 
 ### 🏢 5. Enterprise SSO, SCIM & Governance
+
 - **SAML 2.0 & OIDC:** Domain TXT verification, XML-DSig signature verification, and IdP certificate management.
 - **SCIM 2.0 Directory Sync:** Full `/Users` and `/Groups` sync with rotatable bearer tokens and automatic deprovisioning cascades.
 - **Lifecycle & Governance:** Inactivity-based archival (90-day default), owner-left departure grace periods, and streaming CSV/JSON inventory exports.
 - **Tamper-Evident Audit Log:** Cryptographic SHA-256 hash chains verified on-demand via `capsule audit verify`.
 
 ### 🚨 6. Emergency Kill Switch & Quotas
+
 - Immediate platform-wide or app-specific suspension via `POST /v1/admin/kill-switch`.
 - Aborts in-flight requests in **under 1.2 seconds** (guaranteed within 5 seconds).
 - Mass token and session revocation across entire organizations.
@@ -135,12 +141,14 @@ Every capsule executes inside a **hardened user-space sandbox** with its own ded
 ## 🚀 Quickstart & Local Development
 
 ### Prerequisites
+
 - **Node.js**: `v22.0.0` or higher
 - **Python**: `3.12+` with virtual environment (`.venv`)
 - **Docker Desktop**: Running with WSL2 backend or native Linux Docker daemon
 - **Git**: `2.40+`
 
 ### 1. Clone & Install Dependencies
+
 ```bash
 git clone https://github.com/lakshmikanth823/agent-capsule-platform.git
 cd agent-capsule-platform
@@ -155,22 +163,27 @@ pip install -r services/control-plane/requirements.txt
 ```
 
 ### 2. Configure Environment
+
 ```bash
 cp .env.example .env
 ```
 
 ### 3. Start Local Infrastructure
+
 Start PostgreSQL (port 5432) and MinIO S3 (port 9000):
+
 ```bash
 docker compose up -d
 ```
 
 ### 4. Build Monorepo Workspaces
+
 ```bash
 npm run build
 ```
 
 ### 5. Run Verification Suites
+
 ```bash
 # Run all TypeScript workspace tests (224 tests)
 npm run test:ts
@@ -190,35 +203,41 @@ npm run test:redteam
 ## 🛠️ CLI & Developer Workflow
 
 Install the CLI globally or run it via npx:
+
 ```bash
 npm install -g @capsule/cli
 ```
 
 ### 1. Initialize a New Capsule
+
 ```bash
 capsule init --template leave-tracker
 cd leave-tracker
 ```
 
 ### 2. Local Emulation with Hot Reload
+
 ```bash
 capsule dev
 # Launches local emulator at http://localhost:3000 with mock identity
 ```
 
 ### 3. Validate Manifest
+
 ```bash
 capsule validate
 # Validates shape, capabilities, egress, and limits offline against JSON Schema
 ```
 
 ### 4. Publish Version
+
 ```bash
 capsule login
 capsule publish --message "Release v1.0.0"
 ```
 
 ### 5. Share with Colleagues
+
 ```bash
 # Share with an individual
 capsule share --app leave-tracker --email teammate@company.com --role employee
@@ -249,6 +268,7 @@ Connect the platform directly to your AI coding agents:
 ```
 
 Available MCP Tools:
+
 - `validate_manifest` — Offline manifest validation
 - `publish` — Publish new capsule version with idempotency
 - `share` / `unshare` — Manage RBAC access
@@ -260,15 +280,15 @@ Available MCP Tools:
 
 ## 🔒 Security Posture & Verified Defenses
 
-| Threat Surface | Defense Mechanism | Proving Test Suite |
-|---|---|---|
-| **Container Breakout** | gVisor (`runsc`) user-space Sentry kernel + dropped caps | `driver_conformance.test.ts` |
-| **SSRF & Metadata Theft** | Connection-time DNS pinning; blocks `169.254.169.254` & RFC 1918 | `redteam.test.ts (SSRF)` |
-| **Cross-Capsule Data Theft** | Strict per-app SQLite database and blob directory namespaces | `redteam.test.ts (Cross-Capsule)` |
-| **Identity Header Forgery** | HMAC-SHA256 signature verification with `kid` key rotation | `redteam.test.ts (Identity)` |
-| **Denial of Service** | Cgroups v2 memory limits, `--pids-limit 64`, edge rate limiting | `redteam.test.ts (Resource Limits)` |
-| **LLM Budget Overrun** | Per-app monthly hard stop; fail-closed `429` | `test_ai_gateway.py` |
-| **Audit Log Tampering** | Cryptographic SHA-256 hash chain; PostgreSQL trigger blocks updates | `test_audit_system.py` |
+| Threat Surface               | Defense Mechanism                                                   | Proving Test Suite                  |
+| ---------------------------- | ------------------------------------------------------------------- | ----------------------------------- |
+| **Container Breakout**       | gVisor (`runsc`) user-space Sentry kernel + dropped caps            | `driver_conformance.test.ts`        |
+| **SSRF & Metadata Theft**    | Connection-time DNS pinning; blocks `169.254.169.254` & RFC 1918    | `redteam.test.ts (SSRF)`            |
+| **Cross-Capsule Data Theft** | Strict per-app SQLite database and blob directory namespaces        | `redteam.test.ts (Cross-Capsule)`   |
+| **Identity Header Forgery**  | HMAC-SHA256 signature verification with `kid` key rotation          | `redteam.test.ts (Identity)`        |
+| **Denial of Service**        | Cgroups v2 memory limits, `--pids-limit 64`, edge rate limiting     | `redteam.test.ts (Resource Limits)` |
+| **LLM Budget Overrun**       | Per-app monthly hard stop; fail-closed `429`                        | `test_ai_gateway.py`                |
+| **Audit Log Tampering**      | Cryptographic SHA-256 hash chain; PostgreSQL trigger blocks updates | `test_audit_system.py`              |
 
 ---
 

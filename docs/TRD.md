@@ -1,4 +1,5 @@
 # Technical Requirements Document (TRD)
+
 ## Software Capsule Platform
 
 **Version:** 0.1  
@@ -97,6 +98,7 @@ Endpoint names are implementation proposals, not fixed PRD requirements.
 ## 4.1 API Requirements
 
 The API MUST:
+
 - authenticate and authorize every mutation;
 - validate request schemas;
 - support idempotency for mutations;
@@ -196,6 +198,7 @@ Applications MUST NOT directly access platform infrastructure.
 Builds occur in an isolated builder separate from production Capsules.
 
 The builder MUST:
+
 - have no production credentials;
 - enforce CPU, memory, time and storage limits;
 - support dependency lockfiles;
@@ -210,6 +213,7 @@ Dependency/code scanning MAY run asynchronously as warnings. Scanning is not the
 Every Capsule MUST execute in a strong sandbox suitable for untrusted generated code.
 
 Required properties:
+
 - process isolation;
 - filesystem isolation;
 - network isolation;
@@ -224,6 +228,7 @@ Required properties:
 ### Sandbox Spike
 
 Measure:
+
 - isolation/adversarial escape resistance;
 - p50/p95 cold start;
 - memory overhead;
@@ -299,6 +304,7 @@ If the target version is schema-compatible, restore application code while prese
 ## 13.2 Code + data restore
 
 Requires explicit confirmation and MUST show:
+
 - target version;
 - snapshot timestamp;
 - affected data/time window;
@@ -347,6 +353,7 @@ The application MUST verify signature, issuer, audience and expiry. Signing keys
 Each Capsule MUST have an isolated application origin and MUST NOT share authentication cookies/session state with another Capsule or the platform dashboard.
 
 Required controls include:
+
 - host-only or `__Host-` cookies where applicable;
 - Secure/HttpOnly/SameSite attributes as appropriate;
 - strict CSP;
@@ -420,6 +427,7 @@ Old capabilities -> New capabilities -> Diff
 If a capability is new or broadened, deployment enters `APPROVAL_REQUIRED`.
 
 Human approval is required for, at minimum:
+
 - new capability;
 - broader capability;
 - new service identity;
@@ -445,6 +453,7 @@ egress = DENY
 The application cannot widen the Environment Profile.
 
 The egress layer MUST block:
+
 - loopback;
 - private IPv4/IPv6 ranges;
 - link-local addresses;
@@ -536,6 +545,7 @@ Quota enforcement occurs outside application code.
 The Capsule owner, authorized administrator, or platform security system MUST be able to suspend a Capsule immediately.
 
 Suspension MUST:
+
 - stop new requests;
 - prevent connector access;
 - preserve data/version history;
@@ -548,6 +558,7 @@ Organization administrators MUST be able to disable connectors globally. Publish
 Agent authentication SHOULD use OAuth/device-code or equivalent short-lived interactive credentials.
 
 Credentials SHOULD be:
+
 - short-lived;
 - scoped;
 - revocable;
@@ -645,6 +656,7 @@ Production requirements include backups, encryption, least privilege, migrations
 # 31. Data Protection
 
 The platform MUST provide:
+
 - encryption in transit;
 - encryption at rest;
 - protected backups;
@@ -682,6 +694,7 @@ Stop -> Revoke access -> Remove routing -> Mark data for deletion
 Production builds MUST be isolated from production credentials and unrelated data.
 
 The platform SHOULD provide secure defaults such as:
+
 - HTTPS;
 - HSTS;
 - CSP;
@@ -713,20 +726,25 @@ Advanced distributed tracing/enterprise metrics are deferred.
 # 35. Failure Handling
 
 ### Build failure
+
 No active-version change; return structured error.
 
 ### Policy failure
+
 No deployment; return policy reason.
 
 ### Sandbox failure
+
 Retry according to policy; retain previous active version where possible; record failure.
 
 ### Health-check failure
+
 New version MUST NOT become active until required checks pass.
 
 # 36. Health Checks
 
 The platform SHOULD support:
+
 - process readiness;
 - HTTP health endpoint;
 - startup timeout;
@@ -750,19 +768,20 @@ Idle compute should approach storage-dominant cost. Idle shutdown MUST preserve 
 
 PRD targets:
 
-| Metric | Target |
-|---|---|
-| Publish -> working URL | p95 < 30s for reference app |
-| Share -> first render | < 60s with active IdP session |
-| Cold start | p95 < 2s |
-| Reference bundle | < 5 MB |
-| Idle compute | near-zero / storage-dominant |
+| Metric                 | Target                        |
+| ---------------------- | ----------------------------- |
+| Publish -> working URL | p95 < 30s for reference app   |
+| Share -> first render  | < 60s with active IdP session |
+| Cold start             | p95 < 2s                      |
+| Reference bundle       | < 5 MB                        |
+| Idle compute           | near-zero / storage-dominant  |
 
 Benchmarks MUST define hardware, network conditions, app size, dependencies, sandbox and authentication state.
 
 # 39. Scale Envelope
 
 The platform MUST define numerical limits for:
+
 - users/Capsule;
 - concurrent requests;
 - SQLite size;
@@ -800,6 +819,7 @@ Test API/registry, API/builder, policy engine, edge/identity, edge/Capsule, Caps
 ## 40.3 Security
 
 Malicious Capsules MUST attempt:
+
 - host filesystem access;
 - another Capsule's database/filesystem;
 - metadata services;
@@ -834,24 +854,24 @@ Staging MUST not use production connector credentials or production data.
 
 # 42. Proposed Initial Technology Stack
 
-| Area | Proposed implementation |
-|---|---|
-| Application runtime | Node.js 22 |
-| Application language | TypeScript |
-| Control API | FastAPI/Python |
-| CLI | TypeScript or Python |
-| MCP | Thin API adapter |
-| Control metadata | PostgreSQL |
-| Capsule data | SQLite |
-| Artifacts/files | S3-compatible object storage |
-| Sandbox | Firecracker/gVisor/equivalent |
-| Identity | OIDC provider |
-| Edge | Platform edge proxy |
-| Egress | Dedicated egress proxy |
-| Credentials | Secure secret store + credential broker |
-| Logs | Central log system |
-| Orchestration | Minimal initial orchestration |
-| Kubernetes | Deferred |
+| Area                 | Proposed implementation                 |
+| -------------------- | --------------------------------------- |
+| Application runtime  | Node.js 22                              |
+| Application language | TypeScript                              |
+| Control API          | FastAPI/Python                          |
+| CLI                  | TypeScript or Python                    |
+| MCP                  | Thin API adapter                        |
+| Control metadata     | PostgreSQL                              |
+| Capsule data         | SQLite                                  |
+| Artifacts/files      | S3-compatible object storage            |
+| Sandbox              | Firecracker/gVisor/equivalent           |
+| Identity             | OIDC provider                           |
+| Edge                 | Platform edge proxy                     |
+| Egress               | Dedicated egress proxy                  |
+| Credentials          | Secure secret store + credential broker |
+| Logs                 | Central log system                      |
+| Orchestration        | Minimal initial orchestration           |
+| Kubernetes           | Deferred                                |
 
 These are proposed implementation choices. They can change if the technical contracts and security properties remain intact.
 
@@ -860,6 +880,7 @@ These are proposed implementation choices. They can change if the technical cont
 ## Build
 
 The product-specific moat should include:
+
 - Capsule manifest/API/CLI;
 - policy engine;
 - capability system;
@@ -874,6 +895,7 @@ The product-specific moat should include:
 ## Buy/Reuse
 
 Prefer existing solutions for:
+
 - sandbox runtime;
 - identity provider;
 - object storage;
@@ -944,16 +966,16 @@ The control plane MUST prevent conflicting Capsule operations such as simultaneo
 
 # 47. Access-Control Matrix
 
-| Action | Owner | Editor | User | Agent |
-|---|---:|---:|---:|---:|
-| View app | Yes | Yes | Yes | N/A |
-| Normal publish | Yes | Policy | No | Policy |
-| Change sharing | Yes | Policy | No | No |
-| Approve capability escalation | Yes | Policy | No | **No** |
-| Rollback | Yes | Policy | No | Policy |
-| Suspend | Yes | Policy | No | No |
-| Export | Yes | Policy | No | No |
-| Change ownership | Yes | No | No | No |
+| Action                        | Owner | Editor | User |  Agent |
+| ----------------------------- | ----: | -----: | ---: | -----: |
+| View app                      |   Yes |    Yes |  Yes |    N/A |
+| Normal publish                |   Yes | Policy |   No | Policy |
+| Change sharing                |   Yes | Policy |   No |     No |
+| Approve capability escalation |   Yes | Policy |   No | **No** |
+| Rollback                      |   Yes | Policy |   No | Policy |
+| Suspend                       |   Yes | Policy |   No |     No |
+| Export                        |   Yes | Policy |   No |     No |
+| Change ownership              |   Yes |     No |   No |     No |
 
 Organization policy can further restrict these permissions.
 
@@ -980,30 +1002,31 @@ Required release security suite:
 > 100% of required red-team tests pass before release.
 
 Operational targets include:
+
 - zero confirmed cross-Capsule data-access incidents;
 - blocked unauthorized egress is logged;
 - capability escalation is never approved by the requesting agent.
 
 # 50. Technical Traceability
 
-| PRD | Technical area | Verification |
-|---|---|---|
-| FR-001 | API/CLI/publish | E2E publish |
-| FR-002 | Manifest/JSON Schema | Contract tests |
-| FR-003 | Blessed shape | Validation tests |
-| FR-004 | Sandbox | Adversarial tests |
-| FR-005 | Origin | Browser security tests |
-| FR-006/7 | Identity | OIDC/token tests |
-| FR-008/9/10 | Roles/sharing | Authorization E2E |
-| FR-012/13/14 | SQLite/snapshots/rollback | Recovery tests |
-| FR-016/17/32 | Capabilities | Escalation/adversarial tests |
-| FR-019/20/21 | Egress/SSRF | Network security suite |
-| FR-023/24/25/26 | Credentials/connectors | Broker integration tests |
-| FR-027/28 | Environment Profiles | Policy contract tests |
-| FR-029/30/31 | Versions | Version/rollback tests |
-| FR-037/38/39/40/41 | Audit/kill/revocation/quotas | Governance/security tests |
-| FR-042/43/44/45 | Agent tooling | CLI/API contract tests |
-| FR-046 | Scheduling | Deferred to Phase 3 |
+| PRD                | Technical area               | Verification                 |
+| ------------------ | ---------------------------- | ---------------------------- |
+| FR-001             | API/CLI/publish              | E2E publish                  |
+| FR-002             | Manifest/JSON Schema         | Contract tests               |
+| FR-003             | Blessed shape                | Validation tests             |
+| FR-004             | Sandbox                      | Adversarial tests            |
+| FR-005             | Origin                       | Browser security tests       |
+| FR-006/7           | Identity                     | OIDC/token tests             |
+| FR-008/9/10        | Roles/sharing                | Authorization E2E            |
+| FR-012/13/14       | SQLite/snapshots/rollback    | Recovery tests               |
+| FR-016/17/32       | Capabilities                 | Escalation/adversarial tests |
+| FR-019/20/21       | Egress/SSRF                  | Network security suite       |
+| FR-023/24/25/26    | Credentials/connectors       | Broker integration tests     |
+| FR-027/28          | Environment Profiles         | Policy contract tests        |
+| FR-029/30/31       | Versions                     | Version/rollback tests       |
+| FR-037/38/39/40/41 | Audit/kill/revocation/quotas | Governance/security tests    |
+| FR-042/43/44/45    | Agent tooling                | CLI/API contract tests       |
+| FR-046             | Scheduling                   | Deferred to Phase 3          |
 
 # 51. Phase 0 Technical Deliverables
 

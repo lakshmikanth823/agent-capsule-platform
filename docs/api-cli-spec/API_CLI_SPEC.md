@@ -2,38 +2,41 @@
 
 openapi: 3.1.0
 info:
-  title: Software Capsule Platform API
-  version: 0.1.0
-  description: |
-    Proposed control-plane API for publishing, sharing, inspecting, rolling back,
-    and retrieving logs for Software Capsules.
+title: Software Capsule Platform API
+version: 0.1.0
+description: |
+Proposed control-plane API for publishing, sharing, inspecting, rolling back,
+and retrieving logs for Software Capsules.
 servers:
-  - url: https://api.example.invalid/v1
-    description: Proposed API base URL
+
+- url: https://api.example.invalid/v1
+  description: Proposed API base URL
 
 security:
-  - bearerAuth: []
+
+- bearerAuth: []
 
 tags:
-  - name: Apps
-  - name: Versions
-  - name: Sharing
-  - name: Logs
-  - name: Validation
+
+- name: Apps
+- name: Versions
+- name: Sharing
+- name: Logs
+- name: Validation
 
 paths:
-  /apps:
-    post:
-      tags: [Apps]
-      summary: Create an app
-      operationId: createApp
-      description: Creates a draft Software Capsule registry entry.
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/CreateAppRequest'
+/apps:
+post:
+tags: [Apps]
+summary: Create an app
+operationId: createApp
+description: Creates a draft Software Capsule registry entry.
+requestBody:
+required: true
+content:
+application/json:
+schema:
+$ref: '#/components/schemas/CreateAppRequest'
       responses:
         '201':
           description: App created
@@ -41,33 +44,30 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/App'
-        '400':
-          $ref: '#/components/responses/BadRequest'
+'400':
+$ref: '#/components/responses/BadRequest'
         '409':
           $ref: '#/components/responses/Conflict'
-    get:
-      tags: [Apps]
-      summary: List apps
-      operationId: listApps
-      parameters:
-        - $ref: '#/components/parameters/Limit'
-        - $ref: '#/components/parameters/Cursor'
-        - name: status
-          in: query
-          schema:
-            type: string
-            enum: [draft, active, suspended, archived]
-      responses:
-        '200':
-          description: App list
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/AppList'
+get:
+tags: [Apps]
+summary: List apps
+operationId: listApps
+parameters: - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Cursor' - name: status
+in: query
+schema:
+type: string
+enum: [draft, active, suspended, archived]
+responses:
+'200':
+description: App list
+content:
+application/json:
+schema:
+$ref: '#/components/schemas/AppList'
 
-  /apps/{appId}:
-    parameters:
-      - $ref: '#/components/parameters/AppId'
+/apps/{appId}:
+parameters: - $ref: '#/components/parameters/AppId'
     get:
       tags: [Apps]
       summary: Get app
@@ -79,20 +79,20 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/App'
-        '404':
-          $ref: '#/components/responses/NotFound'
+'404':
+$ref: '#/components/responses/NotFound'
 
-  /apps/{appId}/validate:
-    post:
-      tags: [Validation]
-      summary: Validate a manifest without deploying
-      operationId: validateApp
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/ValidateRequest'
+/apps/{appId}/validate:
+post:
+tags: [Validation]
+summary: Validate a manifest without deploying
+operationId: validateApp
+requestBody:
+required: true
+content:
+application/json:
+schema:
+$ref: '#/components/schemas/ValidateRequest'
       responses:
         '200':
           description: Validation result
@@ -100,55 +100,52 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ValidationResult'
-        '400':
-          $ref: '#/components/responses/BadRequest'
+'400':
+$ref: '#/components/responses/BadRequest'
 
-  /apps/{appId}/publish:
-    post:
-      tags: [Apps]
-      summary: Publish a new app version
-      operationId: publishApp
-      description: |
-        Idempotent publish endpoint. Validates manifest, applies policy,
-        checks required approvals, builds the artifact, creates a deployment
-        version and returns deployment status.
-      parameters:
-        - $ref: '#/components/parameters/IdempotencyKey'
+/apps/{appId}/publish:
+post:
+tags: [Apps]
+summary: Publish a new app version
+operationId: publishApp
+description: |
+Idempotent publish endpoint. Validates manifest, applies policy,
+checks required approvals, builds the artifact, creates a deployment
+version and returns deployment status.
+parameters: - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         required: true
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/PublishRequest'
-      responses:
-        '202':
-          description: Publish accepted
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/PublishOperation'
+responses:
+'202':
+description: Publish accepted
+content:
+application/json:
+schema:
+$ref: '#/components/schemas/PublishOperation'
         '400':
           $ref: '#/components/responses/BadRequest'
-        '403':
-          $ref: '#/components/responses/Forbidden'
+'403':
+$ref: '#/components/responses/Forbidden'
         '409':
           $ref: '#/components/responses/Conflict'
-        '422':
-          description: Manifest or policy validation failed
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ValidationResult'
+'422':
+description: Manifest or policy validation failed
+content:
+application/json:
+schema:
+$ref: '#/components/schemas/ValidationResult'
 
-  /apps/{appId}/versions:
-    get:
-      tags: [Versions]
-      summary: List app versions
-      operationId: listVersions
-      parameters:
-        - $ref: '#/components/parameters/AppId'
-        - $ref: '#/components/parameters/Limit'
-        - $ref: '#/components/parameters/Cursor'
+/apps/{appId}/versions:
+get:
+tags: [Versions]
+summary: List app versions
+operationId: listVersions
+parameters: - $ref: '#/components/parameters/AppId'
+        - $ref: '#/components/parameters/Limit' - $ref: '#/components/parameters/Cursor'
       responses:
         '200':
           description: Version list
@@ -157,43 +154,41 @@ paths:
               schema:
                 $ref: '#/components/schemas/VersionList'
 
-  /apps/{appId}/versions/{versionId}:
-    parameters:
-      - $ref: '#/components/parameters/AppId'
+/apps/{appId}/versions/{versionId}:
+parameters: - $ref: '#/components/parameters/AppId'
       - $ref: '#/components/parameters/VersionId'
-    get:
-      tags: [Versions]
-      summary: Get version
-      operationId: getVersion
-      responses:
-        '200':
-          description: Version
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/AppVersion'
+get:
+tags: [Versions]
+summary: Get version
+operationId: getVersion
+responses:
+'200':
+description: Version
+content:
+application/json:
+schema:
+$ref: '#/components/schemas/AppVersion'
         '404':
           $ref: '#/components/responses/NotFound'
 
-  /apps/{appId}/rollback:
-    post:
-      tags: [Versions]
-      summary: Roll back to a previous version
-      operationId: rollbackApp
-      description: |
-        Creates a new rollback deployment. Code-only rollback is the default
-        when schema-compatible. Code+data restore requires explicit confirmation
-        and a visible data-loss warning. A fresh recovery snapshot is created
-        before the rollback operation.
-      parameters:
-        - $ref: '#/components/parameters/AppId'
+/apps/{appId}/rollback:
+post:
+tags: [Versions]
+summary: Roll back to a previous version
+operationId: rollbackApp
+description: |
+Creates a new rollback deployment. Code-only rollback is the default
+when schema-compatible. Code+data restore requires explicit confirmation
+and a visible data-loss warning. A fresh recovery snapshot is created
+before the rollback operation.
+parameters: - $ref: '#/components/parameters/AppId'
         - $ref: '#/components/parameters/IdempotencyKey'
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/RollbackRequest'
+requestBody:
+required: true
+content:
+application/json:
+schema:
+$ref: '#/components/schemas/RollbackRequest'
       responses:
         '202':
           description: Rollback accepted
@@ -201,12 +196,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/RollbackOperation'
-        '400':
-          $ref: '#/components/responses/BadRequest'
+'400':
+$ref: '#/components/responses/BadRequest'
         '403':
           $ref: '#/components/responses/Forbidden'
-        '409':
-          $ref: '#/components/responses/Conflict'
+'409':
+$ref: '#/components/responses/Conflict'
         '422':
           description: Rollback requires confirmation or is not compatible
           content:
@@ -214,15 +209,13 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
 
-  /apps/{appId}/shares:
-    get:
-      tags: [Sharing]
-      summary: List app shares
-      operationId: listShares
-      parameters:
-        - $ref: '#/components/parameters/AppId'
-        - $ref: '#/components/parameters/Limit'
-        - $ref: '#/components/parameters/Cursor'
+/apps/{appId}/shares:
+get:
+tags: [Sharing]
+summary: List app shares
+operationId: listShares
+parameters: - $ref: '#/components/parameters/AppId'
+        - $ref: '#/components/parameters/Limit' - $ref: '#/components/parameters/Cursor'
       responses:
         '200':
           description: Share list
@@ -230,19 +223,18 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ShareList'
-    post:
-      tags: [Sharing]
-      summary: Create or assign an app share
-      operationId: createShare
-      parameters:
-        - $ref: '#/components/parameters/AppId'
+post:
+tags: [Sharing]
+summary: Create or assign an app share
+operationId: createShare
+parameters: - $ref: '#/components/parameters/AppId'
         - $ref: '#/components/parameters/IdempotencyKey'
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/CreateShareRequest'
+requestBody:
+required: true
+content:
+application/json:
+schema:
+$ref: '#/components/schemas/CreateShareRequest'
       responses:
         '201':
           description: Share created
@@ -250,35 +242,33 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/AppShare'
-        '403':
-          $ref: '#/components/responses/Forbidden'
+'403':
+$ref: '#/components/responses/Forbidden'
         '409':
           $ref: '#/components/responses/Conflict'
 
-  /apps/{appId}/shares/{shareId}:
-    parameters:
-      - $ref: '#/components/parameters/AppId'
+/apps/{appId}/shares/{shareId}:
+parameters: - $ref: '#/components/parameters/AppId'
       - $ref: '#/components/parameters/ShareId'
-    delete:
-      tags: [Sharing]
-      summary: Revoke an app share
-      operationId: revokeShare
-      responses:
-        '204':
-          description: Share revoked
-        '403':
-          $ref: '#/components/responses/Forbidden'
+delete:
+tags: [Sharing]
+summary: Revoke an app share
+operationId: revokeShare
+responses:
+'204':
+description: Share revoked
+'403':
+$ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
 
-  /apps/{appId}/logs:
-    get:
-      tags: [Logs]
-      summary: Retrieve application logs
-      operationId: getLogs
-      description: Returns bounded, paginated runtime logs. Sensitive values must be redacted before exposure.
-      parameters:
-        - $ref: '#/components/parameters/AppId'
+/apps/{appId}/logs:
+get:
+tags: [Logs]
+summary: Retrieve application logs
+operationId: getLogs
+description: Returns bounded, paginated runtime logs. Sensitive values must be redacted before exposure.
+parameters: - $ref: '#/components/parameters/AppId'
         - name: from
           in: query
           schema:
@@ -299,23 +289,22 @@ paths:
           schema:
             type: string
         - $ref: '#/components/parameters/Limit'
-      responses:
-        '200':
-          description: Logs
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/LogList'
+responses:
+'200':
+description: Logs
+content:
+application/json:
+schema:
+$ref: '#/components/schemas/LogList'
         '403':
           $ref: '#/components/responses/Forbidden'
 
-  /apps/{appId}/operations/{operationId}:
-    get:
-      tags: [Apps]
-      summary: Get publish or rollback operation status
-      operationId: getOperation
-      parameters:
-        - $ref: '#/components/parameters/AppId'
+/apps/{appId}/operations/{operationId}:
+get:
+tags: [Apps]
+summary: Get publish or rollback operation status
+operationId: getOperation
+parameters: - $ref: '#/components/parameters/AppId'
         - name: operationId
           in: path
           required: true
@@ -329,79 +318,79 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Operation'
-        '404':
-          $ref: '#/components/responses/NotFound'
+'404':
+$ref: '#/components/responses/NotFound'
 
 components:
-  securitySchemes:
-    bearerAuth:
-      type: http
-      scheme: bearer
-      bearerFormat: OAuth2
+securitySchemes:
+bearerAuth:
+type: http
+scheme: bearer
+bearerFormat: OAuth2
 
-  parameters:
-    AppId:
-      name: appId
-      in: path
-      required: true
-      schema:
-        type: string
-        format: uuid
-    VersionId:
-      name: versionId
-      in: path
-      required: true
-      schema:
-        type: string
-        format: uuid
-    ShareId:
-      name: shareId
-      in: path
-      required: true
-      schema:
-        type: string
-        format: uuid
-    Limit:
-      name: limit
-      in: query
-      schema:
-        type: integer
-        minimum: 1
-        maximum: 100
-        default: 50
-    Cursor:
-      name: cursor
-      in: query
-      schema:
-        type: string
-    IdempotencyKey:
-      name: Idempotency-Key
-      in: header
-      required: true
-      schema:
-        type: string
-        minLength: 16
-        maxLength: 255
+parameters:
+AppId:
+name: appId
+in: path
+required: true
+schema:
+type: string
+format: uuid
+VersionId:
+name: versionId
+in: path
+required: true
+schema:
+type: string
+format: uuid
+ShareId:
+name: shareId
+in: path
+required: true
+schema:
+type: string
+format: uuid
+Limit:
+name: limit
+in: query
+schema:
+type: integer
+minimum: 1
+maximum: 100
+default: 50
+Cursor:
+name: cursor
+in: query
+schema:
+type: string
+IdempotencyKey:
+name: Idempotency-Key
+in: header
+required: true
+schema:
+type: string
+minLength: 16
+maxLength: 255
 
-  responses:
-    BadRequest:
-      description: Invalid request
-      content:
-        application/json:
-          schema:
-            $ref: '#/components/schemas/Error'
+responses:
+BadRequest:
+description: Invalid request
+content:
+application/json:
+schema:
+$ref: '#/components/schemas/Error'
     Forbidden:
       description: Caller is not authorized
       content:
         application/json:
           schema:
             $ref: '#/components/schemas/Error'
-    NotFound:
-      description: Resource not found
-      content:
-        application/json:
-          schema:
-            $ref: '#/components/schemas/Error'
+NotFound:
+description: Resource not found
+content:
+application/json:
+schema:
+$ref: '#/components/schemas/Error'
     Conflict:
       description: State conflict or idempotency conflict
       content:
@@ -409,25 +398,25 @@ components:
           schema:
             $ref: '#/components/schemas/Error'
 
-  schemas:
-    CreateAppRequest:
-      type: object
-      required: [id, name, shape, runtime, manifest]
-      properties:
-        id:
-          type: string
-          pattern: '^[a-z0-9][a-z0-9-]{0,62}$'
-        name:
-          type: string
-          maxLength: 80
-        shape:
-          type: string
-          const: web-app
-        runtime:
-          type: string
-          const: node22
-        manifest:
-          type: object
+schemas:
+CreateAppRequest:
+type: object
+required: [id, name, shape, runtime, manifest]
+properties:
+id:
+type: string
+pattern: '^[a-z0-9][a-z0-9-]{0,62}$'
+name:
+type: string
+maxLength: 80
+shape:
+type: string
+const: web-app
+runtime:
+type: string
+const: node22
+manifest:
+type: object
 
     PublishRequest:
       type: object
@@ -738,8 +727,6 @@ components:
         details:
           type: object
 
-
-
 ---
 
 # Software Capsule CLI Specification
@@ -789,14 +776,14 @@ capsule validate --json
 
 Expected exit codes:
 
-| Code | Meaning |
-|---:|---|
-| `0` | Valid |
-| `2` | Manifest/schema error |
-| `3` | Policy violation |
-| `4` | Approval required |
-| `5` | Authentication/authorization error |
-| `10` | Platform/network error |
+| Code | Meaning                            |
+| ---: | ---------------------------------- |
+|  `0` | Valid                              |
+|  `2` | Manifest/schema error              |
+|  `3` | Policy violation                   |
+|  `4` | Approval required                  |
+|  `5` | Authentication/authorization error |
+| `10` | Platform/network error             |
 
 ## 4. Local development
 
@@ -1085,18 +1072,18 @@ capsule
 
 ## 16. API-to-CLI mapping
 
-| CLI | API |
-|---|---|
-| `capsule app get` | `GET /apps/{appId}` |
-| `capsule validate` | `POST /apps/{appId}/validate` |
-| `capsule publish` | `POST /apps/{appId}/publish` |
-| `capsule status` | `GET /apps/{appId}/operations/{operationId}` |
-| `capsule versions` | `GET /apps/{appId}/versions` |
-| `capsule rollback` | `POST /apps/{appId}/rollback` |
-| `capsule share add` | `POST /apps/{appId}/shares` |
-| `capsule share list` | `GET /apps/{appId}/shares` |
-| `capsule share revoke` | `DELETE /apps/{appId}/shares/{shareId}` |
-| `capsule logs` | `GET /apps/{appId}/logs` |
+| CLI                    | API                                          |
+| ---------------------- | -------------------------------------------- |
+| `capsule app get`      | `GET /apps/{appId}`                          |
+| `capsule validate`     | `POST /apps/{appId}/validate`                |
+| `capsule publish`      | `POST /apps/{appId}/publish`                 |
+| `capsule status`       | `GET /apps/{appId}/operations/{operationId}` |
+| `capsule versions`     | `GET /apps/{appId}/versions`                 |
+| `capsule rollback`     | `POST /apps/{appId}/rollback`                |
+| `capsule share add`    | `POST /apps/{appId}/shares`                  |
+| `capsule share list`   | `GET /apps/{appId}/shares`                   |
+| `capsule share revoke` | `DELETE /apps/{appId}/shares/{shareId}`      |
+| `capsule logs`         | `GET /apps/{appId}/logs`                     |
 
 ## 17. API behavior rules
 

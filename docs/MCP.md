@@ -2,7 +2,7 @@
 
 **Date**: 2026-09-22  
 **Package**: `@capsule/mcp-server` (`packages/mcp-server`)  
-**Status**: Production-Ready  
+**Status**: Production-Ready
 
 ---
 
@@ -11,6 +11,7 @@
 The **Capsule MCP Server** (`@capsule/mcp-server`) is a thin adapter exposing the Software Capsule Platform API and offline CLI validation logic to AI coding agents, desktop IDEs, and autonomous developer workflows via the official **Model Context Protocol (MCP)**.
 
 ### Core Architectural Guarantees:
+
 1. **Zero Privilege Escalation**:
    - The MCP server is strictly a thin wrapper over the existing REST API (`http://localhost:8000`) and the `@capsule/manifest-schema` offline validator.
    - It possesses **no privileges of its own** and can never perform any operation the API would reject.
@@ -38,23 +39,24 @@ The **Capsule MCP Server** (`@capsule/mcp-server`) is a thin adapter exposing th
 
 The adapter provides 9 tools covering the full lifecycle:
 
-| Tool Name | Type | Description | Confirmation Required? |
-| :--- | :--- | :--- | :---: |
-| `validate_manifest` | Read-only / Offline | Validates `capsule.manifest.yaml` offline against schema and policy ceilings. | No |
-| `publish` | Mutation / Online | Publishes a version to the platform with pre-deployment SQLite snapshot. | If `acts_as: "service"` |
-| `share` | Mutation / Online | Assigns application roles to users or groups. | If `scope: "org"` |
-| `unshare` | Mutation / Online | Revokes active sharing assignment. | Yes (`confirm: true`) |
-| `status` | Read-only / Online | Inspects capsule runtime state, version, and live URL. | No |
-| `logs` | Read-only / Online | Retrieves recent stdout/stderr logs (quarantined). | No |
-| `versions` | Read-only / Online | Lists published version history and snapshot refs. | No |
-| `rollback` | Mutation / Online | Rolls back code or code+data to a prior version. | If `code_and_data` |
-| `get_agent_guide` | Read-only / Offline | Returns canonical agent instructions (`docs/AGENT_GUIDE.md`). | No |
+| Tool Name           | Type                | Description                                                                   | Confirmation Required?  |
+| :------------------ | :------------------ | :---------------------------------------------------------------------------- | :---------------------: |
+| `validate_manifest` | Read-only / Offline | Validates `capsule.manifest.yaml` offline against schema and policy ceilings. |           No            |
+| `publish`           | Mutation / Online   | Publishes a version to the platform with pre-deployment SQLite snapshot.      | If `acts_as: "service"` |
+| `share`             | Mutation / Online   | Assigns application roles to users or groups.                                 |    If `scope: "org"`    |
+| `unshare`           | Mutation / Online   | Revokes active sharing assignment.                                            |  Yes (`confirm: true`)  |
+| `status`            | Read-only / Online  | Inspects capsule runtime state, version, and live URL.                        |           No            |
+| `logs`              | Read-only / Online  | Retrieves recent stdout/stderr logs (quarantined).                            |           No            |
+| `versions`          | Read-only / Online  | Lists published version history and snapshot refs.                            |           No            |
+| `rollback`          | Mutation / Online   | Rolls back code or code+data to a prior version.                              |   If `code_and_data`    |
+| `get_agent_guide`   | Read-only / Offline | Returns canonical agent instructions (`docs/AGENT_GUIDE.md`).                 |           No            |
 
 ---
 
 ### Tool Schemas & Examples
 
 #### 1. `validate_manifest`
+
 ```json
 {
   "manifest_content": "apiVersion: capsule/v1alpha1\nid: my-app\nname: My App\nshape: web-app\nruntime: node22\nroles: [user]\nlimits:\n  cpu: small\n  memory_mb: 256\n  request_timeout_s: 30\n",
@@ -63,6 +65,7 @@ The adapter provides 9 tools covering the full lifecycle:
 ```
 
 #### 2. `publish`
+
 ```json
 {
   "app_id": "leave-tracker",
@@ -71,9 +74,11 @@ The adapter provides 9 tools covering the full lifecycle:
   "confirm": false
 }
 ```
-*Note: Set `"confirm": true` if the manifest requests service identity connectors (`acts_as: service`).*
+
+_Note: Set `"confirm": true` if the manifest requests service identity connectors (`acts_as: service`)._
 
 #### 3. `share`
+
 ```json
 // Individual User Share:
 {
@@ -92,6 +97,7 @@ The adapter provides 9 tools covering the full lifecycle:
 ```
 
 #### 4. `unshare`
+
 ```json
 {
   "app_id": "leave-tracker",
@@ -101,6 +107,7 @@ The adapter provides 9 tools covering the full lifecycle:
 ```
 
 #### 5. `status`
+
 ```json
 {
   "app_id": "leave-tracker"
@@ -108,6 +115,7 @@ The adapter provides 9 tools covering the full lifecycle:
 ```
 
 #### 6. `logs`
+
 ```json
 {
   "app_id": "leave-tracker",
@@ -116,6 +124,7 @@ The adapter provides 9 tools covering the full lifecycle:
 ```
 
 #### 7. `versions`
+
 ```json
 {
   "app_id": "leave-tracker"
@@ -123,6 +132,7 @@ The adapter provides 9 tools covering the full lifecycle:
 ```
 
 #### 8. `rollback`
+
 ```json
 // Code-Only Rollback:
 {
@@ -142,6 +152,7 @@ The adapter provides 9 tools covering the full lifecycle:
 ```
 
 #### 9. `get_agent_guide`
+
 ```json
 {
   "section": "manifest"
@@ -155,6 +166,7 @@ The adapter provides 9 tools covering the full lifecycle:
 ### A. Claude Desktop
 
 Add the following to your Claude Desktop configuration file:
+
 - **Windows**: `%APPDATA%\Claude\claude_desktop_config.json`
 - **macOS**: `~/Library/Application Support/Claude/claude_desktop_config.json`
 
@@ -163,9 +175,7 @@ Add the following to your Claude Desktop configuration file:
   "mcpServers": {
     "capsule": {
       "command": "node",
-      "args": [
-        "E:/Cloud/capsule-platform/packages/mcp-server/dist/cli.js"
-      ],
+      "args": ["E:/Cloud/capsule-platform/packages/mcp-server/dist/cli.js"],
       "env": {
         "CONTROL_PLANE_URL": "http://localhost:8000",
         "CAPSULE_TOKEN": "your-scoped-token-or-session-token",
@@ -176,7 +186,7 @@ Add the following to your Claude Desktop configuration file:
 }
 ```
 
-*(If using global npm installation or npx: `"command": "capsule-mcp"`)*
+_(If using global npm installation or npx: `"command": "capsule-mcp"`)_
 
 ---
 
@@ -189,9 +199,7 @@ Add the following to your Cursor configuration (`.cursor/mcp.json` or Cursor Set
   "mcpServers": {
     "capsule-platform": {
       "command": "node",
-      "args": [
-        "E:/Cloud/capsule-platform/packages/mcp-server/dist/cli.js"
-      ],
+      "args": ["E:/Cloud/capsule-platform/packages/mcp-server/dist/cli.js"],
       "env": {
         "CONTROL_PLANE_URL": "http://localhost:8000",
         "CAPSULE_TOKEN": "your-scoped-token-or-session-token"
@@ -212,9 +220,7 @@ Add the server to your Antigravity global configuration (`~/.gemini/antigravity/
   "mcpServers": {
     "capsule": {
       "command": "node",
-      "args": [
-        "E:/Cloud/capsule-platform/packages/mcp-server/dist/cli.js"
-      ],
+      "args": ["E:/Cloud/capsule-platform/packages/mcp-server/dist/cli.js"],
       "env": {
         "CONTROL_PLANE_URL": "http://localhost:8000",
         "CAPSULE_TOKEN": "your-scoped-token-or-session-token",
@@ -229,12 +235,12 @@ Add the server to your Antigravity global configuration (`~/.gemini/antigravity/
 
 ## 4. Environment Variables
 
-| Variable | Description | Default |
-| :--- | :--- | :--- |
-| `CONTROL_PLANE_URL` | Base URL of the control plane API. | `http://localhost:8000` |
-| `CAPSULE_TOKEN` | Authentication session token or scoped publish token (`capsule-token-...`). | From `~/.capsule/config.json` |
-| `CAPSULE_CONFIG_DIR` | Directory containing CLI session config (`config.json`). | `~/.capsule` |
-| `APP_DOMAIN` | Subdomain domain suffix for live applications. | `apps.localhost` |
+| Variable             | Description                                                                 | Default                       |
+| :------------------- | :-------------------------------------------------------------------------- | :---------------------------- |
+| `CONTROL_PLANE_URL`  | Base URL of the control plane API.                                          | `http://localhost:8000`       |
+| `CAPSULE_TOKEN`      | Authentication session token or scoped publish token (`capsule-token-...`). | From `~/.capsule/config.json` |
+| `CAPSULE_CONFIG_DIR` | Directory containing CLI session config (`config.json`).                    | `~/.capsule`                  |
+| `APP_DOMAIN`         | Subdomain domain suffix for live applications.                              | `apps.localhost`              |
 
 ---
 
@@ -251,13 +257,13 @@ When an error occurs, the server responds with `isError: true` and a structured 
 }
 ```
 
-| Error Code | Meaning | Remediation Action |
-| :--- | :--- | :--- |
-| `CONFIRMATION_REQUIRED` | Broad or destructive action requested without `confirm: true`. | Re-run tool with `"confirm": true`. |
-| `UNAUTHENTICATED` | No valid session or `CAPSULE_TOKEN` found. | Run `capsule login` or set `CAPSULE_TOKEN`. |
-| `PERMISSION_DENIED` | Caller lacks owner/editor platform role for app or share. | Contact organization owner. |
-| `CAPABILITY_APPROVAL_REQUIRED` | Manifest requests escalated or sensitive capabilities. | Await org admin approval or narrow manifest. |
-| `QUOTA_EXCEEDED` | Memory, timeout, or storage quota exceeded. | Reduce limits in manifest or upgrade org quota. |
-| `MANIFEST_NOT_FOUND` | `capsule.manifest.yaml` not found at path. | Pass `manifest_content` or run in project directory. |
-| `VERSION_NOT_FOUND` | Target rollback version does not exist. | Use `versions` tool to inspect available versions. |
-| `APP_NOT_FOUND` | Specified capsule does not exist in registry. | Verify `app_id` or run `publish` to create it. |
+| Error Code                     | Meaning                                                        | Remediation Action                                   |
+| :----------------------------- | :------------------------------------------------------------- | :--------------------------------------------------- |
+| `CONFIRMATION_REQUIRED`        | Broad or destructive action requested without `confirm: true`. | Re-run tool with `"confirm": true`.                  |
+| `UNAUTHENTICATED`              | No valid session or `CAPSULE_TOKEN` found.                     | Run `capsule login` or set `CAPSULE_TOKEN`.          |
+| `PERMISSION_DENIED`            | Caller lacks owner/editor platform role for app or share.      | Contact organization owner.                          |
+| `CAPABILITY_APPROVAL_REQUIRED` | Manifest requests escalated or sensitive capabilities.         | Await org admin approval or narrow manifest.         |
+| `QUOTA_EXCEEDED`               | Memory, timeout, or storage quota exceeded.                    | Reduce limits in manifest or upgrade org quota.      |
+| `MANIFEST_NOT_FOUND`           | `capsule.manifest.yaml` not found at path.                     | Pass `manifest_content` or run in project directory. |
+| `VERSION_NOT_FOUND`            | Target rollback version does not exist.                        | Use `versions` tool to inspect available versions.   |
+| `APP_NOT_FOUND`                | Specified capsule does not exist in registry.                  | Verify `app_id` or run `publish` to create it.       |

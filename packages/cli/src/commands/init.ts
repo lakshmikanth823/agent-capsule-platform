@@ -2,51 +2,56 @@
  * capsule init
  * Scaffolds a new Capsule project with starter files and manifest.
  */
-import fs from 'node:fs';
-import path from 'node:path';
-import { outputResult, outputError, CliError } from '../errors.js';
+import fs from "node:fs";
+import path from "node:path";
+import { outputResult, outputError, CliError } from "../errors.js";
 
 export interface InitOptions {
   name?: string;
   json?: boolean;
 }
 
-export async function initCommand(appName?: string, options: InitOptions = {}): Promise<void> {
-  const targetDir = appName ? path.resolve(process.cwd(), appName) : process.cwd();
-  const rawName = appName || path.basename(targetDir) || 'my-capsule-app';
+export async function initCommand(
+  appName?: string,
+  options: InitOptions = {},
+): Promise<void> {
+  const targetDir = appName
+    ? path.resolve(process.cwd(), appName)
+    : process.cwd();
+  const rawName = appName || path.basename(targetDir) || "my-capsule-app";
   const name =
     rawName
       .toLowerCase()
-      .replace(/[^a-z0-9-]/g, '-')
-      .replace(/^-+|-+$/g, '') || 'my-capsule-app';
+      .replace(/[^a-z0-9-]/g, "-")
+      .replace(/^-+|-+$/g, "") || "my-capsule-app";
 
   if (!fs.existsSync(targetDir)) {
     fs.mkdirSync(targetDir, { recursive: true });
   }
 
-  const manifestPath = path.join(targetDir, 'capsule.manifest.yaml');
-  const packageJsonPath = path.join(targetDir, 'package.json');
-  const tsconfigPath = path.join(targetDir, 'tsconfig.json');
-  const srcDir = path.join(targetDir, 'src');
-  const indexTsPath = path.join(srcDir, 'index.ts');
+  const manifestPath = path.join(targetDir, "capsule.manifest.yaml");
+  const packageJsonPath = path.join(targetDir, "package.json");
+  const tsconfigPath = path.join(targetDir, "tsconfig.json");
+  const srcDir = path.join(targetDir, "src");
+  const indexTsPath = path.join(srcDir, "index.ts");
 
   // Check if manifest already exists
   if (fs.existsSync(manifestPath)) {
     outputError(
       new CliError({
-        code: 'PROJECT_ALREADY_INITIALIZED',
+        code: "PROJECT_ALREADY_INITIALIZED",
         message: `Capsule project already exists at ${targetDir} (capsule.manifest.yaml found).`,
         exitCode: 1,
-        hint: 'Use `capsule validate` or `capsule dev` to work with this project.',
+        hint: "Use `capsule validate` or `capsule dev` to work with this project.",
       }),
-      options
+      options,
     );
   }
 
   // 1. capsule.manifest.yaml
   const manifestContent = `apiVersion: capsule/v1alpha1
 id: ${name}
-name: ${name.replace(/-/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())}
+name: ${name.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())}
 shape: web-app
 runtime: node22
 roles:
@@ -69,41 +74,41 @@ limits:
   const packageJsonContent = JSON.stringify(
     {
       name,
-      version: '0.1.0',
-      type: 'module',
+      version: "0.1.0",
+      type: "module",
       scripts: {
-        build: 'tsc',
-        start: 'node dist/index.js',
-        dev: 'capsule dev',
+        build: "tsc",
+        start: "node dist/index.js",
+        dev: "capsule dev",
       },
       dependencies: {
-        '@capsule/sdk': '^0.1.0',
+        "@capsule/sdk": "^0.1.0",
       },
       devDependencies: {
-        typescript: '^5.4.0',
+        typescript: "^5.4.0",
       },
     },
     null,
-    2
+    2,
   );
 
   // 3. tsconfig.json
   const tsconfigContent = JSON.stringify(
     {
       compilerOptions: {
-        target: 'ES2022',
-        module: 'NodeNext',
-        moduleResolution: 'NodeNext',
-        outDir: './dist',
-        rootDir: './src',
+        target: "ES2022",
+        module: "NodeNext",
+        moduleResolution: "NodeNext",
+        outDir: "./dist",
+        rootDir: "./src",
         strict: true,
         esModuleInterop: true,
         skipLibCheck: true,
       },
-      include: ['src/**/*'],
+      include: ["src/**/*"],
     },
     null,
-    2
+    2,
   );
 
   // 4. src/index.ts
@@ -158,27 +163,27 @@ server.listen(port, () => {
 `;
 
   try {
-    fs.writeFileSync(manifestPath, manifestContent, 'utf8');
-    fs.writeFileSync(packageJsonPath, packageJsonContent, 'utf8');
-    fs.writeFileSync(tsconfigPath, tsconfigContent, 'utf8');
+    fs.writeFileSync(manifestPath, manifestContent, "utf8");
+    fs.writeFileSync(packageJsonPath, packageJsonContent, "utf8");
+    fs.writeFileSync(tsconfigPath, tsconfigContent, "utf8");
     fs.mkdirSync(srcDir, { recursive: true });
-    fs.writeFileSync(indexTsPath, indexTsContent, 'utf8');
+    fs.writeFileSync(indexTsPath, indexTsContent, "utf8");
   } catch (err: any) {
     outputError(
       new CliError({
-        code: 'FILE_WRITE_ERROR',
+        code: "FILE_WRITE_ERROR",
         message: `Failed to scaffold project: ${err.message}`,
         exitCode: 1,
       }),
-      options
+      options,
     );
   }
 
   const createdFiles = [
-    'capsule.manifest.yaml',
-    'package.json',
-    'tsconfig.json',
-    'src/index.ts',
+    "capsule.manifest.yaml",
+    "package.json",
+    "tsconfig.json",
+    "src/index.ts",
   ];
 
   outputResult(
@@ -190,15 +195,17 @@ server.listen(port, () => {
     },
     options,
     () => {
-      console.log(`\x1b[32m✔ Initialized new Capsule project in ${targetDir}\x1b[0m`);
-      console.log('\nCreated files:');
+      console.log(
+        `\x1b[32m✔ Initialized new Capsule project in ${targetDir}\x1b[0m`,
+      );
+      console.log("\nCreated files:");
       for (const f of createdFiles) {
         console.log(`  + ${f}`);
       }
-      console.log('\nNext steps:');
-      console.log('  1. Run `capsule validate` to check manifest syntax');
-      console.log('  2. Run `capsule dev` to start the local emulator');
-      console.log('  3. Run `capsule publish` to deploy to the platform');
-    }
+      console.log("\nNext steps:");
+      console.log("  1. Run `capsule validate` to check manifest syntax");
+      console.log("  2. Run `capsule dev` to start the local emulator");
+      console.log("  3. Run `capsule publish` to deploy to the platform");
+    },
   );
 }

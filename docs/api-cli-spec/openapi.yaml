@@ -31,54 +31,54 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/CreateAppRequest'
+              $ref: "#/components/schemas/CreateAppRequest"
       responses:
-        '201':
+        "201":
           description: App created
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/App'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '409':
-          $ref: '#/components/responses/Conflict'
+                $ref: "#/components/schemas/App"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "409":
+          $ref: "#/components/responses/Conflict"
     get:
       tags: [Apps]
       summary: List apps
       operationId: listApps
       parameters:
-        - $ref: '#/components/parameters/Limit'
-        - $ref: '#/components/parameters/Cursor'
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
         - name: status
           in: query
           schema:
             type: string
             enum: [draft, active, suspended, archived]
       responses:
-        '200':
+        "200":
           description: App list
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/AppList'
+                $ref: "#/components/schemas/AppList"
 
   /apps/{appId}:
     parameters:
-      - $ref: '#/components/parameters/AppId'
+      - $ref: "#/components/parameters/AppId"
     get:
       tags: [Apps]
       summary: Get app
       operationId: getApp
       responses:
-        '200':
+        "200":
           description: App
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/App'
-        '404':
-          $ref: '#/components/responses/NotFound'
+                $ref: "#/components/schemas/App"
+        "404":
+          $ref: "#/components/responses/NotFound"
 
   /apps/{appId}/validate:
     post:
@@ -90,16 +90,16 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/ValidateRequest'
+              $ref: "#/components/schemas/ValidateRequest"
       responses:
-        '200':
+        "200":
           description: Validation result
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ValidationResult'
-        '400':
-          $ref: '#/components/responses/BadRequest'
+                $ref: "#/components/schemas/ValidationResult"
+        "400":
+          $ref: "#/components/responses/BadRequest"
 
   /apps/{appId}/publish:
     post:
@@ -111,32 +111,32 @@ paths:
         checks required approvals, builds the artifact, creates a deployment
         version and returns deployment status.
       parameters:
-        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: "#/components/parameters/IdempotencyKey"
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/PublishRequest'
+              $ref: "#/components/schemas/PublishRequest"
       responses:
-        '202':
+        "202":
           description: Publish accepted
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PublishOperation'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '409':
-          $ref: '#/components/responses/Conflict'
-        '422':
+                $ref: "#/components/schemas/PublishOperation"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
           description: Manifest or policy validation failed
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ValidationResult'
+                $ref: "#/components/schemas/ValidationResult"
 
   /apps/{appId}/versions:
     get:
@@ -144,34 +144,34 @@ paths:
       summary: List app versions
       operationId: listVersions
       parameters:
-        - $ref: '#/components/parameters/AppId'
-        - $ref: '#/components/parameters/Limit'
-        - $ref: '#/components/parameters/Cursor'
+        - $ref: "#/components/parameters/AppId"
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
       responses:
-        '200':
+        "200":
           description: Version list
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/VersionList'
+                $ref: "#/components/schemas/VersionList"
 
   /apps/{appId}/versions/{versionId}:
     parameters:
-      - $ref: '#/components/parameters/AppId'
-      - $ref: '#/components/parameters/VersionId'
+      - $ref: "#/components/parameters/AppId"
+      - $ref: "#/components/parameters/VersionId"
     get:
       tags: [Versions]
       summary: Get version
       operationId: getVersion
       responses:
-        '200':
+        "200":
           description: Version
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/AppVersion'
-        '404':
-          $ref: '#/components/responses/NotFound'
+                $ref: "#/components/schemas/AppVersion"
+        "404":
+          $ref: "#/components/responses/NotFound"
 
   /apps/{appId}/rollback:
     post:
@@ -184,33 +184,33 @@ paths:
         and a visible data-loss warning. A fresh recovery snapshot is created
         before the rollback operation.
       parameters:
-        - $ref: '#/components/parameters/AppId'
-        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: "#/components/parameters/AppId"
+        - $ref: "#/components/parameters/IdempotencyKey"
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/RollbackRequest'
+              $ref: "#/components/schemas/RollbackRequest"
       responses:
-        '202':
+        "202":
           description: Rollback accepted
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/RollbackOperation'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '409':
-          $ref: '#/components/responses/Conflict'
-        '422':
+                $ref: "#/components/schemas/RollbackOperation"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
           description: Rollback requires confirmation or is not compatible
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
+                $ref: "#/components/schemas/Error"
 
   /apps/{appId}/shares:
     get:
@@ -218,56 +218,56 @@ paths:
       summary: List app shares
       operationId: listShares
       parameters:
-        - $ref: '#/components/parameters/AppId'
-        - $ref: '#/components/parameters/Limit'
-        - $ref: '#/components/parameters/Cursor'
+        - $ref: "#/components/parameters/AppId"
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
       responses:
-        '200':
+        "200":
           description: Share list
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ShareList'
+                $ref: "#/components/schemas/ShareList"
     post:
       tags: [Sharing]
       summary: Create or assign an app share
       operationId: createShare
       parameters:
-        - $ref: '#/components/parameters/AppId'
-        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: "#/components/parameters/AppId"
+        - $ref: "#/components/parameters/IdempotencyKey"
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/CreateShareRequest'
+              $ref: "#/components/schemas/CreateShareRequest"
       responses:
-        '201':
+        "201":
           description: Share created
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/AppShare'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '409':
-          $ref: '#/components/responses/Conflict'
+                $ref: "#/components/schemas/AppShare"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "409":
+          $ref: "#/components/responses/Conflict"
 
   /apps/{appId}/shares/{shareId}:
     parameters:
-      - $ref: '#/components/parameters/AppId'
-      - $ref: '#/components/parameters/ShareId'
+      - $ref: "#/components/parameters/AppId"
+      - $ref: "#/components/parameters/ShareId"
     delete:
       tags: [Sharing]
       summary: Revoke an app share
       operationId: revokeShare
       responses:
-        '204':
+        "204":
           description: Share revoked
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '404':
-          $ref: '#/components/responses/NotFound'
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
 
   /apps/{appId}/logs:
     get:
@@ -276,7 +276,7 @@ paths:
       operationId: getLogs
       description: Returns bounded, paginated runtime logs. Sensitive values must be redacted before exposure.
       parameters:
-        - $ref: '#/components/parameters/AppId'
+        - $ref: "#/components/parameters/AppId"
         - name: from
           in: query
           schema:
@@ -296,16 +296,16 @@ paths:
           in: query
           schema:
             type: string
-        - $ref: '#/components/parameters/Limit'
+        - $ref: "#/components/parameters/Limit"
       responses:
-        '200':
+        "200":
           description: Logs
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/LogList'
-        '403':
-          $ref: '#/components/responses/Forbidden'
+                $ref: "#/components/schemas/LogList"
+        "403":
+          $ref: "#/components/responses/Forbidden"
 
   /apps/{appId}/operations/{operationId}:
     get:
@@ -313,7 +313,7 @@ paths:
       summary: Get publish or rollback operation status
       operationId: getOperation
       parameters:
-        - $ref: '#/components/parameters/AppId'
+        - $ref: "#/components/parameters/AppId"
         - name: operationId
           in: path
           required: true
@@ -321,14 +321,14 @@ paths:
             type: string
             format: uuid
       responses:
-        '200':
+        "200":
           description: Operation
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Operation'
-        '404':
-          $ref: '#/components/responses/NotFound'
+                $ref: "#/components/schemas/Operation"
+        "404":
+          $ref: "#/components/responses/NotFound"
 
 components:
   securitySchemes:
@@ -387,25 +387,25 @@ components:
       content:
         application/json:
           schema:
-            $ref: '#/components/schemas/Error'
+            $ref: "#/components/schemas/Error"
     Forbidden:
       description: Caller is not authorized
       content:
         application/json:
           schema:
-            $ref: '#/components/schemas/Error'
+            $ref: "#/components/schemas/Error"
     NotFound:
       description: Resource not found
       content:
         application/json:
           schema:
-            $ref: '#/components/schemas/Error'
+            $ref: "#/components/schemas/Error"
     Conflict:
       description: State conflict or idempotency conflict
       content:
         application/json:
           schema:
-            $ref: '#/components/schemas/Error'
+            $ref: "#/components/schemas/Error"
 
   schemas:
     CreateAppRequest:
@@ -414,7 +414,7 @@ components:
       properties:
         id:
           type: string
-          pattern: '^[a-z0-9][a-z0-9-]{0,62}$'
+          pattern: "^[a-z0-9][a-z0-9-]{0,62}$"
         name:
           type: string
           maxLength: 80
@@ -441,7 +441,7 @@ components:
               type: string
             sha256:
               type: string
-              pattern: '^[a-fA-F0-9]{64}$'
+              pattern: "^[a-fA-F0-9]{64}$"
         change_description:
           type: string
           maxLength: 2000
@@ -482,7 +482,7 @@ components:
           format: uuid
         app_role:
           type: string
-          pattern: '^[a-z][a-z0-9_-]{0,63}$'
+          pattern: "^[a-z][a-z0-9_-]{0,63}$"
         expires_at:
           type: string
           format: date-time
@@ -608,7 +608,7 @@ components:
         errors:
           type: array
           items:
-            $ref: '#/components/schemas/Error'
+            $ref: "#/components/schemas/Error"
         created_at:
           type: string
           format: date-time
@@ -618,11 +618,11 @@ components:
 
     PublishOperation:
       allOf:
-        - $ref: '#/components/schemas/Operation'
+        - $ref: "#/components/schemas/Operation"
 
     RollbackOperation:
       allOf:
-        - $ref: '#/components/schemas/Operation'
+        - $ref: "#/components/schemas/Operation"
 
     ValidationResult:
       type: object
@@ -633,7 +633,7 @@ components:
         checks:
           type: array
           items:
-            $ref: '#/components/schemas/ValidationCheck'
+            $ref: "#/components/schemas/ValidationCheck"
         required_approvals:
           type: array
           items:
@@ -684,7 +684,7 @@ components:
         items:
           type: array
           items:
-            $ref: '#/components/schemas/LogEntry'
+            $ref: "#/components/schemas/LogEntry"
         next_cursor:
           type: string
           nullable: true
@@ -695,7 +695,7 @@ components:
         items:
           type: array
           items:
-            $ref: '#/components/schemas/App'
+            $ref: "#/components/schemas/App"
         next_cursor:
           type: string
           nullable: true
@@ -706,7 +706,7 @@ components:
         items:
           type: array
           items:
-            $ref: '#/components/schemas/AppVersion'
+            $ref: "#/components/schemas/AppVersion"
         next_cursor:
           type: string
           nullable: true
@@ -717,7 +717,7 @@ components:
         items:
           type: array
           items:
-            $ref: '#/components/schemas/AppShare'
+            $ref: "#/components/schemas/AppShare"
         next_cursor:
           type: string
           nullable: true
@@ -735,4 +735,3 @@ components:
           type: string
         details:
           type: object
-

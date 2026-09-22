@@ -5,17 +5,12 @@
  */
 
 export type SandboxStatus =
-  | 'pending'
-  | 'running'
-  | 'suspended'
-  | 'stopped'
-  | 'failed'
-  | 'crashed';
+  "pending" | "running" | "suspended" | "stopped" | "failed" | "crashed";
 
 export interface SandboxLimits {
-  cpu: string;            // e.g. "0.5" or "small"
-  memoryMb: number;       // e.g. 256
-  pidsLimit: number;      // e.g. 64
+  cpu: string; // e.g. "0.5" or "small"
+  memoryMb: number; // e.g. 256
+  pidsLimit: number; // e.g. 64
   timeoutSeconds: number; // e.g. 30
 }
 
@@ -24,15 +19,14 @@ export interface SandboxSpec {
   versionId: string;
   appKey: string;
   orgId?: string;
-  bundlePath: string;     // path to application bundle (tar.gz or extracted dir)
-  dataDir: string;        // persistent per-capsule directory for SQLite
+  bundlePath: string; // path to application bundle (tar.gz or extracted dir)
+  dataDir: string; // persistent per-capsule directory for SQLite
   manifest?: Record<string, any>;
   limits?: Partial<SandboxLimits>;
   env?: Record<string, string>;
-  networkMode?: 'none' | 'bridge'; // 'none' is the secure default
-  port?: number;          // internal application port (default 3000)
+  networkMode?: "none" | "bridge"; // 'none' is the secure default
+  port?: number; // internal application port (default 3000)
 }
-
 
 export interface ColdStartStats {
   count: number;
@@ -46,7 +40,7 @@ export interface ColdStartStats {
 }
 
 export interface SandboxInstance {
-  id: string;             // container or VM identifier
+  id: string; // container or VM identifier
   capsuleId: string;
   versionId: string;
   status: SandboxStatus;
@@ -55,7 +49,7 @@ export interface SandboxInstance {
   createdAt: Date;
   startedAt?: Date;
   lastActiveAt: Date;
-  coldStartMs?: number;   // Measured time to become ready (ms)
+  coldStartMs?: number; // Measured time to become ready (ms)
 }
 
 export interface ForwardRequest {
@@ -98,7 +92,10 @@ export interface SandboxDriver {
   logs(instanceId: string, options?: LogOptions): Promise<string[]>;
 
   /** Forward an incoming HTTP request into the capsule */
-  forwardRequest(instanceId: string, req: ForwardRequest): Promise<ForwardResponse>;
+  forwardRequest(
+    instanceId: string,
+    req: ForwardRequest,
+  ): Promise<ForwardResponse>;
 
   /** Recover a crashed or dead instance */
   recover(instanceId: string): Promise<SandboxInstance>;

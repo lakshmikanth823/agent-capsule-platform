@@ -4,12 +4,7 @@
     "init": {
       "success": true,
       "app": "phase0-app",
-      "files": [
-        "capsule.manifest.yaml",
-        "package.json",
-        "src",
-        "tsconfig.json"
-      ]
+      "files": ["capsule.manifest.yaml", "package.json", "src", "tsconfig.json"]
     },
     "publish": {
       "success": true,

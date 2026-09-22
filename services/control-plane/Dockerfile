@@ -9,7 +9,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Python deps into an isolated venv so we can copy only the venv
-COPY requirements.txt .
+COPY services/control-plane/requirements.txt ./requirements.txt
 RUN python -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 RUN pip install --no-cache-dir --upgrade pip \
@@ -34,9 +34,9 @@ COPY --from=builder /opt/venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 
 # Copy application source
-COPY alembic/ ./alembic/
-COPY alembic.ini ./
-COPY src/ ./src/
+COPY services/control-plane/alembic/ ./alembic/
+COPY services/control-plane/alembic.ini ./
+COPY services/control-plane/src/ ./src/
 
 # Copy entrypoint (injected by deploy pipeline)
 COPY deploy/scripts/entrypoint-control-plane.sh /entrypoint.sh

@@ -101,7 +101,7 @@ export const AppDetailScreen: React.FC<AppDetailScreenProps> = ({
   };
 
   const handleSuspend = async () => {
-    if (!suspendReason.trim()) return;
+    if (!suspendReason.trim() || !app) return;
     try {
       setSuspendActionLoading(true);
       setSuspendError(null);
@@ -117,6 +117,7 @@ export const AppDetailScreen: React.FC<AppDetailScreenProps> = ({
   };
 
   const handleResume = async () => {
+    if (!app) return;
     try {
       setSuspendActionLoading(true);
       await api.resumeApp(app.id);

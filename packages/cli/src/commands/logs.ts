@@ -2,27 +2,28 @@
  * capsule logs
  * Retrieves stdout/stderr logs from a running or recent capsule.
  */
-import fs from 'node:fs';
-import path from 'node:path';
-import YAML from 'yaml';
-import { outputResult, outputError, CliError } from '../errors.js';
+import fs from "node:fs";
+import path from "node:path";
+import YAML from "yaml";
+import { outputResult, outputError, CliError } from "../errors.js";
 
 function resolveAppKey(explicitAppKey?: string): string {
   if (explicitAppKey) return explicitAppKey;
-  const manifestPath = path.resolve(process.cwd(), 'capsule.manifest.yaml');
+  const manifestPath = path.resolve(process.cwd(), "capsule.manifest.yaml");
   if (fs.existsSync(manifestPath)) {
     try {
-      const manifest = YAML.parse(fs.readFileSync(manifestPath, 'utf8'));
+      const manifest = YAML.parse(fs.readFileSync(manifestPath, "utf8"));
       if (manifest?.id) return manifest.id;
     } catch {
       // ignore
     }
   }
   throw new CliError({
-    code: 'APP_NOT_SPECIFIED',
-    message: 'Could not determine target capsule. Specify --app <appKey> or run from a project directory.',
+    code: "APP_NOT_SPECIFIED",
+    message:
+      "Could not determine target capsule. Specify --app <appKey> or run from a project directory.",
     exitCode: 1,
-    hint: 'Pass --app <appKey> or run inside a folder with capsule.manifest.yaml.',
+    hint: "Pass --app <appKey> or run inside a folder with capsule.manifest.yaml.",
   });
 }
 
@@ -62,6 +63,6 @@ export async function logsCommand(options: LogsOptions = {}): Promise<void> {
       for (const line of slicedLogs) {
         console.log(line);
       }
-    }
+    },
   );
 }

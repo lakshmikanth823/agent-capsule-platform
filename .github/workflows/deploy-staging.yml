@@ -19,7 +19,7 @@ jobs:
     name: Build & Push to ECR (staging)
     runs-on: ubuntu-latest
     permissions:
-      id-token: write   # OIDC token for AWS auth (no long-lived keys needed)
+      id-token: write # OIDC token for AWS auth (no long-lived keys needed)
       contents: read
 
     steps:

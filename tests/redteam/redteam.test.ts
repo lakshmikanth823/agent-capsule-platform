@@ -13,15 +13,15 @@
  * 9. Add a new capability in a later version and get it deployed without approval
  */
 
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import path from 'node:path';
-import fs from 'node:fs/promises';
+import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import path from "node:path";
+import fs from "node:fs/promises";
 import {
   evaluateEgressPolicy,
   isPrivateOrBlockedIp,
   resolveAndValidateDestination,
   EgressPolicy,
-} from '../../services/egress-proxy/src/index.js';
+} from "../../services/egress-proxy/src/index.js";
 import {
   getFiles,
   getDatabase,
@@ -30,18 +30,19 @@ import {
   createDevIdentityToken,
   IdentityVerificationError,
   FileStorageError,
-} from '../../packages/sdk/src/index.js';
-import { DockerDevDriver } from '../../packages/sandbox-driver/src/drivers/docker.js';
-import { GVisorDriver } from '../../packages/sandbox-driver/src/drivers/gvisor.js';
-import { MockSandboxDriver } from '../../packages/sandbox-driver/src/drivers/mock.js';
-import { createDefaultSandboxDriver } from '../../packages/sandbox-driver/src/lifecycle.js';
+} from "../../packages/sdk/src/index.js";
+import { DockerDevDriver } from "../../packages/sandbox-driver/src/drivers/docker.js";
+import { GVisorDriver } from "../../packages/sandbox-driver/src/drivers/gvisor.js";
+import { MockSandboxDriver } from "../../packages/sandbox-driver/src/drivers/mock.js";
+import { createDefaultSandboxDriver } from "../../packages/sandbox-driver/src/lifecycle.js";
 
-describe('Red-Team Security Test Suite (Prompt 16)', () => {
-  const TEST_DIR = path.resolve(process.cwd(), '.capsule-redteam-test');
+describe("Red-Team Security Test Suite (Prompt 16)", () => {
+  const TEST_DIR = path.resolve(process.cwd(), ".capsule-redteam-test");
 
   beforeAll(async () => {
     await fs.mkdir(TEST_DIR, { recursive: true });
-    process.env.CAPSULE_IDENTITY_SECRET = 'platform-test-signing-secret-key-12345';
+    process.env.CAPSULE_IDENTITY_SECRET =
+      "platform-test-signing-secret-key-12345";
   });
 
   afterAll(async () => {
@@ -54,96 +55,108 @@ describe('Red-Team Security Test Suite (Prompt 16)', () => {
   // =========================================================================
   // 1. REACH INTERNET, INTERNAL ADDRESSES, AND CLOUD METADATA ADDRESS
   // =========================================================================
-  describe('1. Network Egress & SSRF / Metadata Protections', () => {
-    it('should block access to Cloud Metadata service (169.254.169.254)', () => {
-      const check = isPrivateOrBlockedIp('169.254.169.254');
+  describe("1. Network Egress & SSRF / Metadata Protections", () => {
+    it("should block access to Cloud Metadata service (169.254.169.254)", () => {
+      const check = isPrivateOrBlockedIp("169.254.169.254");
       expect(check.blocked).toBe(true);
-      expect(check.reason).toContain('Link-local');
+      expect(check.reason).toContain("Link-local");
     });
 
-    it('should block access to internal control plane and loopback (127.0.0.1, localhost)', async () => {
-      const loopbackCheck = isPrivateOrBlockedIp('127.0.0.1');
+    it("should block access to internal control plane and loopback (127.0.0.1, localhost)", async () => {
+      const loopbackCheck = isPrivateOrBlockedIp("127.0.0.1");
       expect(loopbackCheck.blocked).toBe(true);
 
-      const hostnameCheck = await resolveAndValidateDestination('localhost');
+      const hostnameCheck = await resolveAndValidateDestination("localhost");
       expect(hostnameCheck.valid).toBe(false);
-      expect(hostnameCheck.reason).toContain('internal hostname');
+      expect(hostnameCheck.reason).toContain("internal hostname");
     });
 
-    it('should block access to private RFC 1918 CIDRs (10.0.0.1, 172.16.0.1, 192.168.1.1)', () => {
-      expect(isPrivateOrBlockedIp('10.0.0.1').blocked).toBe(true);
-      expect(isPrivateOrBlockedIp('172.16.0.1').blocked).toBe(true);
-      expect(isPrivateOrBlockedIp('192.168.1.1').blocked).toBe(true);
-      expect(isPrivateOrBlockedIp('0.0.0.0').blocked).toBe(true);
+    it("should block access to private RFC 1918 CIDRs (10.0.0.1, 172.16.0.1, 192.168.1.1)", () => {
+      expect(isPrivateOrBlockedIp("10.0.0.1").blocked).toBe(true);
+      expect(isPrivateOrBlockedIp("172.16.0.1").blocked).toBe(true);
+      expect(isPrivateOrBlockedIp("192.168.1.1").blocked).toBe(true);
+      expect(isPrivateOrBlockedIp("0.0.0.0").blocked).toBe(true);
     });
 
-    it('should deny arbitrary internet egress by default when capsule declares empty egress list', () => {
+    it("should deny arbitrary internet egress by default when capsule declares empty egress list", () => {
       const policy: EgressPolicy = {
-        appKey: 'malicious-app',
+        appKey: "malicious-app",
         appAllowlist: [], // Default-deny!
       };
 
-      const eval1 = evaluateEgressPolicy('8.8.8.8', 80, policy);
+      const eval1 = evaluateEgressPolicy("8.8.8.8", 80, policy);
       expect(eval1.allowed).toBe(false);
-      expect(eval1.reason).toContain('Default deny');
+      expect(eval1.reason).toContain("Default deny");
 
-      const eval2 = evaluateEgressPolicy('google.com', 443, policy);
+      const eval2 = evaluateEgressPolicy("google.com", 443, policy);
       expect(eval2.allowed).toBe(false);
     });
 
-    it('should block DNS rebinding tricks attempting to bypass egress checks at connection time', async () => {
+    it("should block DNS rebinding tricks attempting to bypass egress checks at connection time", async () => {
       const rebindingDns = {
-        lookup: async () => [{ address: '127.0.0.1', family: 4 }],
+        lookup: async () => [{ address: "127.0.0.1", family: 4 }],
       };
-      const result = await resolveAndValidateDestination('rebinding.attacker.com', rebindingDns);
+      const result = await resolveAndValidateDestination(
+        "rebinding.attacker.com",
+        rebindingDns,
+      );
       expect(result.valid).toBe(false);
-      expect(result.reason).toContain('Loopback address');
+      expect(result.reason).toContain("Loopback address");
     });
   });
 
   // =========================================================================
   // 2. READ ANOTHER CAPSULE'S FILES OR DATABASE
   // =========================================================================
-  describe('2. Cross-Capsule Data & Filesystem Isolation', () => {
-    it('should block path traversal when reading files through SDK (../)', async () => {
-      const blobDir = path.join(TEST_DIR, 'capsule-a', 'blobs');
+  describe("2. Cross-Capsule Data & Filesystem Isolation", () => {
+    it("should block path traversal when reading files through SDK (../)", async () => {
+      const blobDir = path.join(TEST_DIR, "capsule-a", "blobs");
       await fs.mkdir(blobDir, { recursive: true });
 
       // Create a secret file in adjacent capsule directory
-      const victimDir = path.join(TEST_DIR, 'capsule-victim');
+      const victimDir = path.join(TEST_DIR, "capsule-victim");
       await fs.mkdir(victimDir, { recursive: true });
-      await fs.writeFile(path.join(victimDir, 'app.sqlite'), 'VICTIM SECRET DATA');
+      await fs.writeFile(
+        path.join(victimDir, "app.sqlite"),
+        "VICTIM SECRET DATA",
+      );
 
       process.env.CAPSULE_BLOB_DIR = blobDir;
       const files = getFiles();
 
       // Attempt path traversal read
-      await expect(files.get('../capsule-victim/app.sqlite')).rejects.toThrow(FileStorageError);
-      await expect(files.get('../../etc/passwd')).rejects.toThrow(/path traversal/i);
-    });
-
-    it('should block path traversal when writing files through SDK (../)', async () => {
-      const blobDir = path.join(TEST_DIR, 'capsule-a', 'blobs');
-      process.env.CAPSULE_BLOB_DIR = blobDir;
-      const files = getFiles();
-
-      await expect(files.put('../victim.txt', Buffer.from('malicious overwrite'))).rejects.toThrow(
-        /path traversal/i
+      await expect(files.get("../capsule-victim/app.sqlite")).rejects.toThrow(
+        FileStorageError,
+      );
+      await expect(files.get("../../etc/passwd")).rejects.toThrow(
+        /path traversal/i,
       );
     });
 
-    it('should verify per-capsule database isolation (separate SQLite files)', () => {
-      const dbPathA = path.join(TEST_DIR, 'capsule-a', 'local.db');
-      const dbPathB = path.join(TEST_DIR, 'capsule-b', 'local.db');
+    it("should block path traversal when writing files through SDK (../)", async () => {
+      const blobDir = path.join(TEST_DIR, "capsule-a", "blobs");
+      process.env.CAPSULE_BLOB_DIR = blobDir;
+      const files = getFiles();
+
+      await expect(
+        files.put("../victim.txt", Buffer.from("malicious overwrite")),
+      ).rejects.toThrow(/path traversal/i);
+    });
+
+    it("should verify per-capsule database isolation (separate SQLite files)", () => {
+      const dbPathA = path.join(TEST_DIR, "capsule-a", "local.db");
+      const dbPathB = path.join(TEST_DIR, "capsule-b", "local.db");
 
       const dbA = getDatabase({ path: dbPathA });
-      dbA.exec("CREATE TABLE IF NOT EXISTS secret (val TEXT); INSERT INTO secret VALUES ('capsule-a-secret');");
+      dbA.exec(
+        "CREATE TABLE IF NOT EXISTS secret (val TEXT); INSERT INTO secret VALUES ('capsule-a-secret');",
+      );
 
       const dbB = getDatabase({ path: dbPathB });
-      dbB.exec('CREATE TABLE IF NOT EXISTS other (val TEXT);');
+      dbB.exec("CREATE TABLE IF NOT EXISTS other (val TEXT);");
 
       // Verify dbB cannot see dbA tables
-      expect(() => dbB.query('SELECT * FROM secret')).toThrow();
+      expect(() => dbB.query("SELECT * FROM secret")).toThrow();
       dbA.close();
       dbB.close();
     });
@@ -152,15 +165,15 @@ describe('Red-Team Security Test Suite (Prompt 16)', () => {
   // =========================================================================
   // 3. READ ENVIRONMENT VARIABLES OR FILES THAT CONTAIN SECRETS
   // =========================================================================
-  describe('3. Secrets Isolation & Zero Plaintext Exposure', () => {
-    it('should verify application environment does NOT contain platform master secrets or connector credentials', () => {
+  describe("3. Secrets Isolation & Zero Plaintext Exposure", () => {
+    it("should verify application environment does NOT contain platform master secrets or connector credentials", () => {
       const dangerousKeys = [
-        'CAPSULE_SECRET_KEY',
-        'POSTGRES_PASSWORD',
-        'DATABASE_URL',
-        'SLACK_BOT_TOKEN',
-        'SLACK_WEBHOOK_URL',
-        'GOOGLE_CLIENT_SECRET',
+        "CAPSULE_SECRET_KEY",
+        "POSTGRES_PASSWORD",
+        "DATABASE_URL",
+        "SLACK_BOT_TOKEN",
+        "SLACK_WEBHOOK_URL",
+        "GOOGLE_CLIENT_SECRET",
       ];
 
       for (const key of dangerousKeys) {
@@ -168,32 +181,33 @@ describe('Red-Team Security Test Suite (Prompt 16)', () => {
       }
     });
 
-    it('should verify Docker sandbox flags do NOT inject master secrets into container environment', () => {
+    it("should verify Docker sandbox flags do NOT inject master secrets into container environment", () => {
       const driver = new DockerDevDriver();
       // Inspect start spec: only safe public env vars (PORT, NODE_ENV, CAPSULE_ID, APP_ID)
-      expect(driver.name).toBe('docker-dev-driver');
+      expect(driver.name).toBe("docker-dev-driver");
     });
   });
 
   // =========================================================================
   // 4. STEAL COOKIES OR SESSIONS FROM ANOTHER APP ORIGIN OR DASHBOARD
   // =========================================================================
-  describe('4. Cookie & Origin Isolation', () => {
-    it('should ensure session cookies use HttpOnly, Secure, and SameSite attributes', async () => {
+  describe("4. Cookie & Origin Isolation", () => {
+    it("should ensure session cookies use HttpOnly, Secure, and SameSite attributes", async () => {
       // In edge-proxy config/session:
       // Session cookies must be HttpOnly so JavaScript in an app cannot read document.cookie
-      const cookieHeader = 'capsule_session=xyz123; HttpOnly; SameSite=Lax; Path=/';
-      expect(cookieHeader).toContain('HttpOnly');
-      expect(cookieHeader).toContain('SameSite=');
+      const cookieHeader =
+        "capsule_session=xyz123; HttpOnly; SameSite=Lax; Path=/";
+      expect(cookieHeader).toContain("HttpOnly");
+      expect(cookieHeader).toContain("SameSite=");
     });
 
-    it('should enforce distinct origin subdomains per capsule (SOP isolation)', () => {
+    it("should enforce distinct origin subdomains per capsule (SOP isolation)", () => {
       // App A origin: leave-tracker.apps.localhost:8080
       // App B origin: malicious-app.apps.localhost:8080
       // Dashboard origin: dashboard.localhost:5173
-      const appA = new URL('http://leave-tracker.apps.localhost:8080');
-      const appB = new URL('http://malicious-app.apps.localhost:8080');
-      const dashboard = new URL('http://dashboard.localhost:5173');
+      const appA = new URL("http://leave-tracker.apps.localhost:8080");
+      const appB = new URL("http://malicious-app.apps.localhost:8080");
+      const dashboard = new URL("http://dashboard.localhost:5173");
 
       expect(appA.origin).not.toBe(appB.origin);
       expect(appA.origin).not.toBe(dashboard.origin);
@@ -203,40 +217,42 @@ describe('Red-Team Security Test Suite (Prompt 16)', () => {
   // =========================================================================
   // 5. EXCEED CPU, MEMORY, DISK, OR TIME LIMITS
   // =========================================================================
-  describe('5. Resource Quota Enforcement', () => {
-    it('should enforce SQLite disk quota via max_page_count (reject with SQLITE_FULL)', () => {
-      const dbPath = path.join(TEST_DIR, 'quota-test.db');
+  describe("5. Resource Quota Enforcement", () => {
+    it("should enforce SQLite disk quota via max_page_count (reject with SQLITE_FULL)", () => {
+      const dbPath = path.join(TEST_DIR, "quota-test.db");
       // Set 1MB limit for rapid test
       const db = getDatabase({ path: dbPath, maxSizeMb: 1 });
 
-      db.exec('CREATE TABLE IF NOT EXISTS test_quota (data TEXT)');
-      const bigString = 'X'.repeat(64 * 1024); // 64KB
+      db.exec("CREATE TABLE IF NOT EXISTS test_quota (data TEXT)");
+      const bigString = "X".repeat(64 * 1024); // 64KB
 
       let quotaExceeded = false;
       try {
         // Attempt to insert 2MB (exceeds 1MB quota)
         for (let i = 0; i < 35; i++) {
-          db.execute('INSERT INTO test_quota (data) VALUES (?)', [bigString]);
+          db.execute("INSERT INTO test_quota (data) VALUES (?)", [bigString]);
         }
       } catch (err: any) {
-        quotaExceeded = err.message.includes('database or disk is full') || err.message.includes('SQLITE_FULL');
+        quotaExceeded =
+          err.message.includes("database or disk is full") ||
+          err.message.includes("SQLITE_FULL");
       }
 
       expect(quotaExceeded).toBe(true);
       db.close();
     });
 
-    it('should verify container resource limits configured in DockerDevDriver', () => {
+    it("should verify container resource limits configured in DockerDevDriver", () => {
       const spec = {
-        capsuleId: 'test-limits',
-        versionId: 'v1',
-        appKey: 'test-limits',
+        capsuleId: "test-limits",
+        versionId: "v1",
+        appKey: "test-limits",
         bundlePath: TEST_DIR,
-        dataDir: path.join(TEST_DIR, 'data'),
+        dataDir: path.join(TEST_DIR, "data"),
         limits: {
-          cpu: 'small',       // 0.5 CPUs
-          memoryMb: 256,      // 256MB
-          pidsLimit: 64,      // 64 processes
+          cpu: "small", // 0.5 CPUs
+          memoryMb: 256, // 256MB
+          pidsLimit: 64, // 64 processes
           timeoutSeconds: 30, // 30s timeout
         },
       };
@@ -249,91 +265,100 @@ describe('Red-Team Security Test Suite (Prompt 16)', () => {
   // =========================================================================
   // 6. ESCAPE THE SANDBOX (WRITE OUTSIDE ALLOWED PATHS, RAW SOCKETS, PROCESS FORK)
   // =========================================================================
-  describe('6. Sandbox Escape Defenses', () => {
-    it('should verify read-only root filesystem flag in Docker driver (--read-only)', () => {
+  describe("6. Sandbox Escape Defenses", () => {
+    it("should verify read-only root filesystem flag in Docker driver (--read-only)", () => {
       const driver = new DockerDevDriver();
-      expect(driver.name).toBe('docker-dev-driver');
+      expect(driver.name).toBe("docker-dev-driver");
     });
 
-    it('should verify process limit (pids-limit) prevents fork bombs from crashing host', () => {
+    it("should verify process limit (pids-limit) prevents fork bombs from crashing host", () => {
       const driver = new DockerDevDriver();
       // Docker driver sets '--pids-limit', '64'
       // Any attempt to spawn > 64 processes is blocked by Linux cgroup pids controller with EAGAIN
       expect(driver).toBeDefined();
     });
 
-    it('should enforce user-space kernel isolation with GVisorDriver (Option A runsc)', async () => {
+    it("should enforce user-space kernel isolation with GVisorDriver (Option A runsc)", async () => {
       const gvDriver = new GVisorDriver();
-      expect(gvDriver.name).toBe('gvisor');
+      expect(gvDriver.name).toBe("gvisor");
 
       const sampleSpec = {
-        capsuleId: 'redteam-escape-test',
-        versionId: 'v1',
-        appKey: 'redteam-escape-test',
+        capsuleId: "redteam-escape-test",
+        versionId: "v1",
+        appKey: "redteam-escape-test",
         bundlePath: TEST_DIR,
-        dataDir: path.join(TEST_DIR, 'data'),
-        limits: { cpu: '0.5', memoryMb: 256, pidsLimit: 64, timeoutSeconds: 30 },
-        networkMode: 'none' as const,
+        dataDir: path.join(TEST_DIR, "data"),
+        limits: {
+          cpu: "0.5",
+          memoryMb: 256,
+          pidsLimit: 64,
+          timeoutSeconds: 30,
+        },
+        networkMode: "none" as const,
       };
 
-      const args = await gvDriver.buildExecutionArgs(sampleSpec, 'rt-escape-test');
+      const args = await gvDriver.buildExecutionArgs(
+        sampleSpec,
+        "rt-escape-test",
+      );
 
       // 1. gVisor Sentry user-space kernel runtime
-      expect(args).toContain('--runtime');
-      const rtIdx = args.indexOf('--runtime');
-      expect(args[rtIdx + 1]).toBe('runsc');
-      expect(args).toContain('--runtime-flag=--platform=ptrace');
+      expect(args).toContain("--runtime");
+      const rtIdx = args.indexOf("--runtime");
+      expect(args[rtIdx + 1]).toBe("runsc");
+      expect(args).toContain("--runtime-flag=--platform=ptrace");
 
       // 2. Non-root user (UID 1000:1000)
-      const userIdx = args.indexOf('--user');
+      const userIdx = args.indexOf("--user");
       expect(userIdx).not.toBe(-1);
-      expect(args[userIdx + 1]).toBe('1000:1000');
+      expect(args[userIdx + 1]).toBe("1000:1000");
 
       // 3. Read-only root filesystem
-      expect(args).toContain('--read-only');
+      expect(args).toContain("--read-only");
 
       // 4. Dropped capabilities & prevent privilege escalation
-      expect(args).toContain('--cap-drop=ALL');
-      expect(args).toContain('no-new-privileges:true');
+      expect(args).toContain("--cap-drop=ALL");
+      expect(args).toContain("no-new-privileges:true");
 
       // 5. Default deny network isolation
-      expect(args).toContain('--network');
-      expect(args).toContain('none');
-      expect(args).toContain('--runtime-flag=--network=none');
+      expect(args).toContain("--network");
+      expect(args).toContain("none");
+      expect(args).toContain("--runtime-flag=--network=none");
 
       // 6. Strict cgroups limits
-      expect(args).toContain('--cpus');
-      expect(args).toContain('0.5');
-      expect(args).toContain('--memory');
-      expect(args).toContain('256m');
-      expect(args).toContain('--pids-limit');
-      expect(args).toContain('64');
+      expect(args).toContain("--cpus");
+      expect(args).toContain("0.5");
+      expect(args).toContain("--memory");
+      expect(args).toContain("256m");
+      expect(args).toContain("--pids-limit");
+      expect(args).toContain("64");
     });
 
-    it('should refuse to run insecure DockerDevDriver in production environment without override', () => {
+    it("should refuse to run insecure DockerDevDriver in production environment without override", () => {
       const origNodeEnv = process.env.NODE_ENV;
       const origInsecure = process.env.ALLOW_INSECURE_DEV_DRIVER;
       try {
-        process.env.NODE_ENV = 'production';
+        process.env.NODE_ENV = "production";
         delete process.env.ALLOW_INSECURE_DEV_DRIVER;
 
         expect(() => new DockerDevDriver()).toThrow(
-          /\[SECURITY INVARIANT VIOLATION\] DockerDevDriver is an insecure development driver and cannot be used in production/
+          /\[SECURITY INVARIANT VIOLATION\] DockerDevDriver is an insecure development driver and cannot be used in production/,
         );
       } finally {
         if (origNodeEnv !== undefined) process.env.NODE_ENV = origNodeEnv;
         else delete process.env.NODE_ENV;
-        if (origInsecure !== undefined) process.env.ALLOW_INSECURE_DEV_DRIVER = origInsecure;
+        if (origInsecure !== undefined)
+          process.env.ALLOW_INSECURE_DEV_DRIVER = origInsecure;
         else delete process.env.ALLOW_INSECURE_DEV_DRIVER;
       }
     });
 
-    it('should select GVisorDriver automatically in production via driver factory', () => {
+    it("should select GVisorDriver automatically in production via driver factory", () => {
       const origNodeEnv = process.env.NODE_ENV;
       try {
-        process.env.NODE_ENV = 'production';
+        process.env.NODE_ENV = "production";
         const driver = createDefaultSandboxDriver();
-        expect(driver.name).toBe('gvisor');
+        expect(driver.name).toBe("gvisor");
       } finally {
         if (origNodeEnv !== undefined) process.env.NODE_ENV = origNodeEnv;
         else delete process.env.NODE_ENV;
@@ -344,125 +369,156 @@ describe('Red-Team Security Test Suite (Prompt 16)', () => {
   // =========================================================================
   // 7. FORGE OR REPLAY SIGNED IDENTITY HEADER
   // =========================================================================
-  describe('7. Identity Header Forgery & Replay Defense', () => {
-    it('should reject forged identity header with invalid HMAC signature', () => {
+  describe("7. Identity Header Forgery & Replay Defense", () => {
+    it("should reject forged identity header with invalid HMAC signature", () => {
       // Create valid token then tamper with the payload
       const validToken = createDevIdentityToken({
-        userId: 'alice-123',
-        roles: ['employee'],
+        userId: "alice-123",
+        roles: ["employee"],
       });
 
-      const [header, payload, signature] = validToken.split('.');
+      const [header, payload, signature] = validToken.split(".");
       // Tamper: elevate role to 'admin'
       const tamperedPayload = Buffer.from(
-        JSON.stringify({ sub: 'alice-123', roles: ['admin', 'owner'], exp: Math.floor(Date.now() / 1000) + 3600 })
+        JSON.stringify({
+          sub: "alice-123",
+          roles: ["admin", "owner"],
+          exp: Math.floor(Date.now() / 1000) + 3600,
+        }),
       )
-        .toString('base64')
-        .replace(/=/g, '')
-        .replace(/\+/g, '-')
-        .replace(/\//g, '_');
+        .toString("base64")
+        .replace(/=/g, "")
+        .replace(/\+/g, "-")
+        .replace(/\//g, "_");
 
       const forgedToken = `${header}.${tamperedPayload}.${signature}`;
 
       // 1. getIdentity returns null
       expect(getIdentity(forgedToken)).toBeNull();
       // 2. requireIdentity throws IdentityVerificationError
-      expect(() => requireIdentity(forgedToken)).toThrow(IdentityVerificationError);
-      expect(() => requireIdentity(forgedToken)).toThrow(/Invalid identity token signature/);
+      expect(() => requireIdentity(forgedToken)).toThrow(
+        IdentityVerificationError,
+      );
+      expect(() => requireIdentity(forgedToken)).toThrow(
+        /Invalid identity token signature/,
+      );
     });
 
     it('should reject algorithm "none" attack', () => {
-      const noneHeader = Buffer.from(JSON.stringify({ alg: 'none', typ: 'JWT' }))
-        .toString('base64')
-        .replace(/=/g, '');
-      const payload = Buffer.from(JSON.stringify({ sub: 'attacker', exp: Math.floor(Date.now() / 1000) + 3600 }))
-        .toString('base64')
-        .replace(/=/g, '');
+      const noneHeader = Buffer.from(
+        JSON.stringify({ alg: "none", typ: "JWT" }),
+      )
+        .toString("base64")
+        .replace(/=/g, "");
+      const payload = Buffer.from(
+        JSON.stringify({
+          sub: "attacker",
+          exp: Math.floor(Date.now() / 1000) + 3600,
+        }),
+      )
+        .toString("base64")
+        .replace(/=/g, "");
       const noneToken = `${noneHeader}.${payload}.`;
 
       expect(getIdentity(noneToken)).toBeNull();
-      expect(() => requireIdentity(noneToken)).toThrow(IdentityVerificationError);
+      expect(() => requireIdentity(noneToken)).toThrow(
+        IdentityVerificationError,
+      );
       expect(() => requireIdentity(noneToken)).toThrow(/Unsupported algorithm/);
     });
 
-    it('should reject expired identity tokens (replay defense)', () => {
+    it("should reject expired identity tokens (replay defense)", () => {
       const expiredToken = createDevIdentityToken({
-        userId: 'bob-456',
+        userId: "bob-456",
         expiresInSeconds: -3600, // Expired 1 hour ago
       });
 
       expect(getIdentity(expiredToken)).toBeNull();
-      expect(() => requireIdentity(expiredToken)).toThrow(IdentityVerificationError);
-      expect(() => requireIdentity(expiredToken)).toThrow(/Identity token expired/);
+      expect(() => requireIdentity(expiredToken)).toThrow(
+        IdentityVerificationError,
+      );
+      expect(() => requireIdentity(expiredToken)).toThrow(
+        /Identity token expired/,
+      );
     });
 
-    it('should reject identity token with audience mismatch (cross-app replay defense)', () => {
+    it("should reject identity token with audience mismatch (cross-app replay defense)", () => {
       const tokenForAppB = createDevIdentityToken({
-        userId: 'bob-456',
-        audience: 'capsule:app-b',
+        userId: "bob-456",
+        audience: "capsule:app-b",
       });
 
       // App A expects audience 'capsule:app-a'
-      expect(getIdentity(tokenForAppB, { audience: 'capsule:app-a' })).toBeNull();
+      expect(
+        getIdentity(tokenForAppB, { audience: "capsule:app-a" }),
+      ).toBeNull();
       expect(() =>
-        requireIdentity(tokenForAppB, { audience: 'capsule:app-a' })
+        requireIdentity(tokenForAppB, { audience: "capsule:app-a" }),
       ).toThrow(IdentityVerificationError);
       expect(() =>
-        requireIdentity(tokenForAppB, { audience: 'capsule:app-a' })
+        requireIdentity(tokenForAppB, { audience: "capsule:app-a" }),
       ).toThrow(/Audience mismatch/);
     });
 
-    it('should reject raw unsigned JSON identity header in strict production mode (SEC-001)', () => {
+    it("should reject raw unsigned JSON identity header in strict production mode (SEC-001)", () => {
       const rawJson = JSON.stringify({
-        sub: 'attacker-666',
-        roles: ['owner', 'admin'],
-        email: 'attacker@evil.com',
+        sub: "attacker-666",
+        roles: ["owner", "admin"],
+        email: "attacker@evil.com",
       });
 
-      process.env.STRICT_IDENTITY = 'true';
+      process.env.STRICT_IDENTITY = "true";
       try {
         // Must return null when throwOnError is false
         expect(getIdentity(rawJson)).toBeNull();
 
         // Must throw IdentityVerificationError with UNSIGNED_IDENTITY_REJECTED
-        expect(() => requireIdentity(rawJson)).toThrow(IdentityVerificationError);
-        expect(() => requireIdentity(rawJson)).toThrow(/Unsigned identity header rejected/i);
+        expect(() => requireIdentity(rawJson)).toThrow(
+          IdentityVerificationError,
+        );
+        expect(() => requireIdentity(rawJson)).toThrow(
+          /Unsigned identity header rejected/i,
+        );
       } finally {
         delete process.env.STRICT_IDENTITY;
       }
     });
 
-    it('should reject identity token signed with untrusted/wrong key (SEC-003)', () => {
+    it("should reject identity token signed with untrusted/wrong key (SEC-003)", () => {
       // Sign with an attacker key
       const attackerToken = createDevIdentityToken({
-        userId: 'attacker-123',
-        roles: ['admin'],
-        secret: 'attacker-untrusted-secret-key-99999',
+        userId: "attacker-123",
+        roles: ["admin"],
+        secret: "attacker-untrusted-secret-key-99999",
       });
 
       expect(getIdentity(attackerToken)).toBeNull();
-      expect(() => requireIdentity(attackerToken)).toThrow(IdentityVerificationError);
-      expect(() => requireIdentity(attackerToken)).toThrow(/Invalid identity token signature/i);
+      expect(() => requireIdentity(attackerToken)).toThrow(
+        IdentityVerificationError,
+      );
+      expect(() => requireIdentity(attackerToken)).toThrow(
+        /Invalid identity token signature/i,
+      );
     });
   });
 
   // =========================================================================
   // 8. USE A CAPABILITY IT DID NOT DECLARE
   // =========================================================================
-  describe('8. Undeclared Capability Enforcement', () => {
-    it('should block invoking a connector that was not declared in manifest', async () => {
+  describe("8. Undeclared Capability Enforcement", () => {
+    it("should block invoking a connector that was not declared in manifest", async () => {
       // In control plane: invoke_connector checks app.manifest.capabilities.connectors
       // If connector_name is not declared, returns 403 CAPABILITY_DENIED
       const manifestWithoutConnectors = {
         capabilities: {
-          db: { type: 'sqlite' },
+          db: { type: "sqlite" },
           connectors: [], // None declared!
         },
       };
 
-      const hasDeclared = (manifestWithoutConnectors.capabilities.connectors as any[]).some(
-        (c: any) => c === 'slack.post' || c.name === 'slack.post'
-      );
+      const hasDeclared = (
+        manifestWithoutConnectors.capabilities.connectors as any[]
+      ).some((c: any) => c === "slack.post" || c.name === "slack.post");
       expect(hasDeclared).toBe(false);
     });
   });
@@ -470,19 +526,20 @@ describe('Red-Team Security Test Suite (Prompt 16)', () => {
   // =========================================================================
   // 9. ADD A NEW CAPABILITY IN A LATER VERSION WITHOUT APPROVAL
   // =========================================================================
-  describe('9. Unauthorized Capability Escalation on Update', () => {
-    it('should hold deployment in pending_approval when adding new capabilities or service identity', () => {
+  describe("9. Unauthorized Capability Escalation on Update", () => {
+    it("should hold deployment in pending_approval when adding new capabilities or service identity", () => {
       // In control plane detect_capability_escalation:
       // Adding new connector or upgrading from viewer to service triggers escalation
-      const oldCaps = { db: { type: 'sqlite' } };
+      const oldCaps = { db: { type: "sqlite" } };
       const newCaps = {
-        db: { type: 'sqlite' },
+        db: { type: "sqlite" },
         ai: { monthly_budget_usd: 10 },
-        connectors: [{ name: 'slack.post', acts_as: 'service' }],
+        connectors: [{ name: "slack.post", acts_as: "service" }],
       };
 
       const hasNewAi = !(oldCaps as any).ai && !!newCaps.ai;
-      const hasNewConnector = !(oldCaps as any).connectors && !!newCaps.connectors;
+      const hasNewConnector =
+        !(oldCaps as any).connectors && !!newCaps.connectors;
 
       expect(hasNewAi).toBe(true);
       expect(hasNewConnector).toBe(true);

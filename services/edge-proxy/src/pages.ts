@@ -7,7 +7,10 @@
  * - Platform Login (Mock IdP in development)
  */
 
-export function renderAppNotFoundPage(appKey: string, hostname: string): string {
+export function renderAppNotFoundPage(
+  appKey: string,
+  hostname: string,
+): string {
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -39,7 +42,7 @@ export function renderNotAuthorizedPage(
   appKey: string,
   userEmail: string,
   orgId: string,
-  reason = 'You do not have permission to access this capsule.'
+  reason = "You do not have permission to access this capsule.",
 ): string {
   return `<!DOCTYPE html>
 <html lang="en">
@@ -73,7 +76,10 @@ export function renderNotAuthorizedPage(
 </html>`;
 }
 
-export function renderPlatformLoginPage(targetApp: string, returnTo: string): string {
+export function renderPlatformLoginPage(
+  targetApp: string,
+  returnTo: string,
+): string {
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -125,7 +131,10 @@ export function renderPlatformLoginPage(targetApp: string, returnTo: string): st
 </html>`;
 }
 
-export function renderAppSuspendedPage(appKey: string, reason?: string): string {
+export function renderAppSuspendedPage(
+  appKey: string,
+  reason?: string,
+): string {
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -147,7 +156,7 @@ export function renderAppSuspendedPage(appKey: string, reason?: string): string 
     <h1>Capsule Suspended</h1>
     <p>This application has been suspended by an administrator or emergency kill switch.</p>
     <div><span class="badge">${appKey}</span></div>
-    ${reason ? `<div class="reason"><strong>Reason:</strong> ${reason}</div>` : ''}
+    ${reason ? `<div class="reason"><strong>Reason:</strong> ${reason}</div>` : ""}
     <p>Please contact your capsule owner or organization administrator to resume this service.</p>
     <div class="footer">Software Capsule Platform • Edge Proxy Kill Switch</div>
   </div>
@@ -177,7 +186,7 @@ export function renderOrgSuspendedPage(orgId: string, reason?: string): string {
     <h1>Organization Frozen</h1>
     <p>All applications in this organization have been frozen by an emergency organization kill switch.</p>
     <div><span class="badge">Org: ${orgId}</span></div>
-    ${reason ? `<div class="reason"><strong>Reason:</strong> ${reason}</div>` : ''}
+    ${reason ? `<div class="reason"><strong>Reason:</strong> ${reason}</div>` : ""}
     <p>All sandboxes are suspended and egress is disabled. Contact your organization administrator.</p>
     <div class="footer">Software Capsule Platform • Edge Proxy Kill Switch</div>
   </div>
@@ -193,10 +202,12 @@ export function renderConsentScreen(params: {
   spreadsheetIds?: string[];
   returnTo: string;
 }): string {
-  const scopeList = params.scopes.map((s) => `<li><code>${s}</code></li>`).join('');
+  const scopeList = params.scopes
+    .map((s) => `<li><code>${s}</code></li>`)
+    .join("");
   const sheetList =
     params.spreadsheetIds && params.spreadsheetIds.length > 0
-      ? `<div style="margin-top: 10px;"><strong>Allowed Spreadsheets:</strong><ul style="margin: 4px 0 0 0; padding-left: 20px;">${params.spreadsheetIds.map((id) => `<li><code>${id}</code></li>`).join('')}</ul></div>`
+      ? `<div style="margin-top: 10px;"><strong>Allowed Spreadsheets:</strong><ul style="margin: 4px 0 0 0; padding-left: 20px;">${params.spreadsheetIds.map((id) => `<li><code>${id}</code></li>`).join("")}</ul></div>`
       : `<p style="margin-top: 8px; font-style: italic; color: #4b5563;">Access to spreadsheets permitted by your Google account.</p>`;
 
   return `<!DOCTYPE html>
@@ -246,4 +257,3 @@ export function renderConsentScreen(params: {
 </body>
 </html>`;
 }
-

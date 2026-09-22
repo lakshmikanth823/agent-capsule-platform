@@ -5,7 +5,13 @@
  * Note: The platform, not this SDK, is the security boundary.
  */
 
-import { getDatabase, SQLiteDatabase, type DatabaseClient, type DatabaseOptions, type RunResult } from './db.js';
+import {
+  getDatabase,
+  SQLiteDatabase,
+  type DatabaseClient,
+  type DatabaseOptions,
+  type RunResult,
+} from "./db.js";
 import {
   getIdentity,
   requireIdentity,
@@ -14,7 +20,7 @@ import {
   IdentityVerificationError,
   type IdentityContext,
   type VerifyIdentityOptions,
-} from './identity.js';
+} from "./identity.js";
 import {
   getFiles,
   PlatformFileStorage,
@@ -23,21 +29,21 @@ import {
   type FileMetadata,
   type PutFileResult,
   type GetFileResult,
-} from './files.js';
+} from "./files.js";
 import {
   isEmulatorMode,
   createDevIdentityToken,
   setupEmulator,
   type DevTokenOptions,
   type EmulatorConfig,
-} from './emulator.js';
+} from "./emulator.js";
 import {
   getConnector,
   PlatformConnectorClient,
   ConnectorError,
   type ConnectorClient,
   type ConnectorInvokeOptions,
-} from './connectors.js';
+} from "./connectors.js";
 import {
   getAI,
   PlatformAIClient,
@@ -48,7 +54,7 @@ import {
   type AIStreamChunk,
   type AppAIUsage,
   type AIUsageMetrics,
-} from './ai.js';
+} from "./ai.js";
 
 export {
   // Database
@@ -100,11 +106,17 @@ export {
  * Backward-compatible helper for parsing identity header.
  * Supports both signed JWT tokens and raw JSON strings.
  */
-export function parseIdentityHeader(headerValue?: string): IdentityContext | null {
+export function parseIdentityHeader(
+  headerValue?: string,
+): IdentityContext | null {
   if (!headerValue) return null;
   try {
     const parsed = JSON.parse(headerValue);
-    if (parsed && typeof parsed === 'object' && typeof parsed.sub === 'string') {
+    if (
+      parsed &&
+      typeof parsed === "object" &&
+      typeof parsed.sub === "string"
+    ) {
       return createIdentityContext(parsed);
     }
   } catch {
@@ -136,9 +148,9 @@ export const sdk = {
   isEmulatorMode,
   setupEmulator,
   createDevIdentityToken,
-  version: '0.1.0',
+  version: "0.1.0",
 };
 
-export const sdkVersion = '0.1.0';
+export const sdkVersion = "0.1.0";
 
 export default sdk;

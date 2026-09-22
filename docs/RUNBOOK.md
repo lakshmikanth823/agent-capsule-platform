@@ -2,7 +2,7 @@
 
 **Version:** 1.0  
 **Last Updated:** 2026-09-22  
-**Audience:** Platform operators and on-call engineers  
+**Audience:** Platform operators and on-call engineers
 
 > [!IMPORTANT]
 > This runbook assumes the platform is deployed on AWS with Docker Compose + systemd + gVisor on Ubuntu 24.04 LTS EC2 instances. See [docs/TRD.md](./TRD.md) for architecture and [SANDBOX_RUNBOOK.md](./SANDBOX_RUNBOOK.md) for sandbox-specific procedures.
@@ -27,6 +27,7 @@
 ## 1. Prerequisites & Access
 
 ### Required tools on operator workstation
+
 ```bash
 # AWS CLI v2
 aws --version  # >= 2.15
@@ -37,18 +38,18 @@ aws --version  # >= 2.15
 
 ### EC2 instance inventory
 
-| Role | AWS Name Tag | Internal IP | SSH User |
-|---|---|---|---|
-| Control Plane | `capsule-control-plane` | 10.0.1.10 | ubuntu |
-| Sandbox Host 1 | `capsule-sandbox-01` | 10.0.2.10 | ubuntu |
-| Edge / nginx | Runs on control-plane VM | — | — |
+| Role           | AWS Name Tag             | Internal IP | SSH User |
+| -------------- | ------------------------ | ----------- | -------- |
+| Control Plane  | `capsule-control-plane`  | 10.0.1.10   | ubuntu   |
+| Sandbox Host 1 | `capsule-sandbox-01`     | 10.0.2.10   | ubuntu   |
+| Edge / nginx   | Runs on control-plane VM | —           | —        |
 
 ### AWS Secrets Manager paths
 
-| Secret | Path |
-|---|---|
+| Secret                | Path                               |
+| --------------------- | ---------------------------------- |
 | Control Plane secrets | `capsule/production/control-plane` |
-| Sandbox Host secrets | `capsule/production/sandbox-host` |
+| Sandbox Host secrets  | `capsule/production/sandbox-host`  |
 
 ---
 
@@ -60,10 +61,12 @@ aws --version  # >= 2.15
 ### Step 1 — Provision EC2 instances
 
 Launch two Ubuntu 24.04 LTS instances on AWS:
+
 - **Control Plane**: t3.medium, 30GB root EBS gp3, in the platform VPC
 - **Sandbox Host**: t3.medium, 50GB root EBS gp3 (extra space for container images), same VPC
 
 Assign an IAM Instance Profile to each EC2 with permissions:
+
 - `secretsmanager:GetSecretValue` for its own secret path
 - `s3:*` on the `capsule-artifacts-*` bucket prefix
 - `ecr:GetAuthorizationToken`, `ecr:BatchGetImage`, `ecr:GetDownloadUrlForLayer`
@@ -78,7 +81,7 @@ git clone https://github.com/your-org/capsule-platform.git /opt/capsule
 # Bootstrap control-plane VM
 sudo bash /opt/capsule/deploy/scripts/bootstrap-ec2.sh control-plane
 
-# Bootstrap sandbox-host VM  
+# Bootstrap sandbox-host VM
 sudo bash /opt/capsule/deploy/scripts/bootstrap-ec2.sh sandbox-host
 ```
 
@@ -351,6 +354,7 @@ sudo docker exec capsule-control-plane-nginx-1 nginx -s reload
 ```
 
 To restore:
+
 ```bash
 sudo docker exec capsule-control-plane-nginx-1 \
   rm /etc/nginx/conf.d/maintenance.conf
@@ -373,35 +377,36 @@ sudo docker exec capsule-control-plane-nginx-1 nginx -s reload
 
 ### Health check endpoints
 
-| Endpoint | Expected response |
-|---|---|
+| Endpoint                       | Expected response                    |
+| ------------------------------ | ------------------------------------ |
 | `GET /healthz` (control-plane) | `{"status": "ok", "version": "..."}` |
-| `GET /healthz` (edge-proxy) | `{"status": "ok"}` |
-| `GET /healthz` (egress-proxy) | `{"status": "ok"}` |
-| `GET /healthz` (builder) | `{"status": "ok"}` |
+| `GET /healthz` (edge-proxy)    | `{"status": "ok"}`                   |
+| `GET /healthz` (egress-proxy)  | `{"status": "ok"}`                   |
+| `GET /healthz` (builder)       | `{"status": "ok"}`                   |
 
 ### Grafana dashboards
 
 Access Grafana at `http://monitoring-host:3000` (internal only):
+
 - **Platform Overview** — error rate, request latency, sandbox launches, egress denials, active capsules
 - **AI Gateway** — token usage/day, cost/day, budget headroom by org
 
 ### CloudWatch log groups
 
-| Log Group | Content |
-|---|---|
+| Log Group                | Content                      |
+| ------------------------ | ---------------------------- |
 | `/capsule/control-plane` | FastAPI structured JSON logs |
-| `/capsule/nginx` | nginx access + error logs |
-| `/capsule/builder` | Build job logs |
-| `/capsule/egress-proxy` | Allowed/denied egress events |
+| `/capsule/nginx`         | nginx access + error logs    |
+| `/capsule/builder`       | Build job logs               |
+| `/capsule/egress-proxy`  | Allowed/denied egress events |
 
 ### Alert escalation
 
-| Severity | Response time | Contact |
-|---|---|---|
-| Critical | 15 min | On-call via PagerDuty |
-| Warning | 4 hours | ops@example.com |
-| Security | Immediate | security@example.com + PagerDuty |
+| Severity | Response time | Contact                          |
+| -------- | ------------- | -------------------------------- |
+| Critical | 15 min        | On-call via PagerDuty            |
+| Warning  | 4 hours       | ops@example.com                  |
+| Security | Immediate     | security@example.com + PagerDuty |
 
 ---
 
@@ -425,11 +430,12 @@ bash deploy/scripts/backup-restore-drill.sh
 
 ### Drill log
 
-| Date | Operator | RDS Result | S3 Result | Notes |
-|---|---|---|---|---|
-| YYYY-MM-DD | — | — | — | Initial drill pending first production deploy |
+| Date       | Operator | RDS Result | S3 Result | Notes                                         |
+| ---------- | -------- | ---------- | --------- | --------------------------------------------- |
+| YYYY-MM-DD | —        | —          | —         | Initial drill pending first production deploy |
 
 > Document each drill run here. Expected output:
+>
 > ```
 > [drill][PASS] RDS restore instance is available
 > [drill][PASS] Schema verified: N public tables found in restored instance

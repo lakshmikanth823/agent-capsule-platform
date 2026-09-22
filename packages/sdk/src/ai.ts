@@ -8,10 +8,10 @@
  * - In local emulator mode, provides safe local emulation without requiring external credentials.
  */
 
-import { isEmulatorMode } from './emulator.js';
+import { isEmulatorMode } from "./emulator.js";
 
 export interface AIChatMessage {
-  role: 'system' | 'user' | 'assistant';
+  role: "system" | "user" | "assistant";
   content: string;
 }
 
@@ -64,10 +64,10 @@ export class AIGatewayError extends Error {
     message: string,
     public readonly code: string,
     public readonly statusCode: number,
-    public readonly details?: any
+    public readonly details?: any,
   ) {
     super(message);
-    this.name = 'AIGatewayError';
+    this.name = "AIGatewayError";
   }
 }
 
@@ -78,8 +78,8 @@ export class PlatformAIClient {
       process.env.CAPSULE_GATEWAY_URL ||
       process.env.CAPSULE_BROKER_URL ||
       process.env.CONTROL_PLANE_URL ||
-      'http://localhost:8000'
-    ).replace(/\/$/, '');
+      "http://localhost:8000"
+    ).replace(/\/$/, "");
   }
 
   private getHeaders(options?: AIChatOptions): Record<string, string> {
@@ -87,25 +87,23 @@ export class PlatformAIClient {
       options?.appKey ||
       process.env.CAPSULE_KEY ||
       process.env.CAPSULE_ID ||
-      'current-app';
+      "current-app";
 
-    const appId = options?.appId || process.env.CAPSULE_APP_ID || '';
+    const appId = options?.appId || process.env.CAPSULE_APP_ID || "";
 
     const identityHeader =
-      options?.identityHeader ||
-      process.env.CAPSULE_IDENTITY_TOKEN ||
-      '';
+      options?.identityHeader || process.env.CAPSULE_IDENTITY_TOKEN || "";
 
     const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-      'x-capsule-key': appKey,
+      "Content-Type": "application/json",
+      "x-capsule-key": appKey,
     };
 
     if (appId) {
-      headers['x-capsule-id'] = appId;
+      headers["x-capsule-id"] = appId;
     }
     if (identityHeader) {
-      headers['x-capsule-identity'] = identityHeader;
+      headers["x-capsule-identity"] = identityHeader;
     }
 
     return headers;
@@ -116,10 +114,15 @@ export class PlatformAIClient {
    */
   async chat(
     messages: AIChatMessage[],
-    options: AIChatOptions = {}
+    options: AIChatOptions = {},
   ): Promise<AIChatResponse> {
     // 1. Emulator Mode Fallback
-    if (isEmulatorMode() && !process.env.CONTROL_PLANE_URL && !process.env.CAPSULE_GATEWAY_URL && !options.gatewayUrl) {
+    if (
+      isEmulatorMode() &&
+      !process.env.CONTROL_PLANE_URL &&
+      !process.env.CAPSULE_GATEWAY_URL &&
+      !options.gatewayUrl
+    ) {
       return this.emulateChat(messages, options);
     }
 
@@ -132,7 +135,8 @@ export class PlatformAIClient {
       stream: false,
     };
     if (options.model) body.model = options.model;
-    if (options.temperature !== undefined) body.temperature = options.temperature;
+    if (options.temperature !== undefined)
+      body.temperature = options.temperature;
     if (options.maxTokens !== undefined) body.max_tokens = options.maxTokens;
     if (options.appKey) body.app_key = options.appKey;
     if (options.appId) body.app_id = options.appId;
@@ -140,15 +144,15 @@ export class PlatformAIClient {
     let response: Response;
     try {
       response = await fetch(endpoint, {
-        method: 'POST',
+        method: "POST",
         headers: this.getHeaders(options),
         body: JSON.stringify(body),
       });
     } catch (err: any) {
       throw new AIGatewayError(
         `Failed to reach AI Gateway at ${endpoint}: ${err.message}`,
-        'GATEWAY_UNREACHABLE',
-        503
+        "GATEWAY_UNREACHABLE",
+        503,
       );
     }
 
@@ -161,10 +165,11 @@ export class PlatformAIClient {
       }
       const detail = errPayload.detail || errPayload;
       throw new AIGatewayError(
-        detail.message || `AI Gateway request failed with HTTP ${response.status}`,
-        detail.code || 'GATEWAY_ERROR',
+        detail.message ||
+          `AI Gateway request failed with HTTP ${response.status}`,
+        detail.code || "GATEWAY_ERROR",
         response.status,
-        detail
+        detail,
       );
     }
 
@@ -176,11 +181,16 @@ export class PlatformAIClient {
    */
   async *stream(
     messages: AIChatMessage[],
-    options: AIChatOptions = {}
+    options: AIChatOptions = {},
   ): AsyncGenerator<AIStreamChunk, void, unknown> {
-    if (isEmulatorMode() && !process.env.CONTROL_PLANE_URL && !process.env.CAPSULE_GATEWAY_URL && !options.gatewayUrl) {
+    if (
+      isEmulatorMode() &&
+      !process.env.CONTROL_PLANE_URL &&
+      !process.env.CAPSULE_GATEWAY_URL &&
+      !options.gatewayUrl
+    ) {
       const emu = await this.emulateChat(messages, options);
-      yield { delta: emu.content, finish_reason: 'stop', usage: emu.usage };
+      yield { delta: emu.content, finish_reason: "stop", usage: emu.usage };
       return;
     }
 
@@ -192,7 +202,8 @@ export class PlatformAIClient {
       stream: true,
     };
     if (options.model) body.model = options.model;
-    if (options.temperature !== undefined) body.temperature = options.temperature;
+    if (options.temperature !== undefined)
+      body.temperature = options.temperature;
     if (options.maxTokens !== undefined) body.max_tokens = options.maxTokens;
     if (options.appKey) body.app_key = options.appKey;
     if (options.appId) body.app_id = options.appId;
@@ -200,18 +211,18 @@ export class PlatformAIClient {
     let response: Response;
     try {
       response = await fetch(endpoint, {
-        method: 'POST',
+        method: "POST",
         headers: {
           ...this.getHeaders(options),
-          Accept: 'text/event-stream',
+          Accept: "text/event-stream",
         },
         body: JSON.stringify(body),
       });
     } catch (err: any) {
       throw new AIGatewayError(
         `Failed to connect to AI Gateway stream at ${endpoint}: ${err.message}`,
-        'GATEWAY_UNREACHABLE',
-        503
+        "GATEWAY_UNREACHABLE",
+        503,
       );
     }
 
@@ -224,36 +235,41 @@ export class PlatformAIClient {
       }
       const detail = errPayload.detail || errPayload;
       throw new AIGatewayError(
-        detail.message || `AI Gateway stream failed with HTTP ${response.status}`,
-        detail.code || 'GATEWAY_ERROR',
+        detail.message ||
+          `AI Gateway stream failed with HTTP ${response.status}`,
+        detail.code || "GATEWAY_ERROR",
         response.status,
-        detail
+        detail,
       );
     }
 
     const reader = response.body?.getReader();
     if (!reader) {
-      throw new AIGatewayError('Response body is not readable.', 'STREAM_ERROR', 500);
+      throw new AIGatewayError(
+        "Response body is not readable.",
+        "STREAM_ERROR",
+        500,
+      );
     }
 
     const decoder = new TextDecoder();
-    let buffer = '';
+    let buffer = "";
 
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
 
       buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split('\n');
-      buffer = lines.pop() || '';
+      const lines = buffer.split("\n");
+      buffer = lines.pop() || "";
 
       for (const line of lines) {
         const trimmed = line.trim();
-        if (!trimmed || trimmed.startsWith(':')) continue;
+        if (!trimmed || trimmed.startsWith(":")) continue;
 
-        if (trimmed.startsWith('data: ')) {
+        if (trimmed.startsWith("data: ")) {
           const dataStr = trimmed.substring(6).trim();
-          if (dataStr === '[DONE]') {
+          if (dataStr === "[DONE]") {
             return;
           }
           try {
@@ -270,11 +286,19 @@ export class PlatformAIClient {
   /**
    * Retrieves usage and monthly budget metrics for the current application.
    */
-  async getUsage(options?: { appId?: string; appKey?: string; gatewayUrl?: string }): Promise<AppAIUsage> {
+  async getUsage(options?: {
+    appId?: string;
+    appKey?: string;
+    gatewayUrl?: string;
+  }): Promise<AppAIUsage> {
     const baseUrl = this.getBaseUrl(options);
     const appId = options?.appId || process.env.CAPSULE_APP_ID;
     if (!appId) {
-      throw new AIGatewayError('appId is required to query app usage.', 'APP_ID_REQUIRED', 400);
+      throw new AIGatewayError(
+        "appId is required to query app usage.",
+        "APP_ID_REQUIRED",
+        400,
+      );
     }
 
     const endpoint = `${baseUrl}/v1/apps/${encodeURIComponent(appId)}/ai/usage`;
@@ -283,15 +307,25 @@ export class PlatformAIClient {
     });
 
     if (!response.ok) {
-      throw new AIGatewayError(`Failed to fetch AI usage: HTTP ${response.status}`, 'GATEWAY_ERROR', response.status);
+      throw new AIGatewayError(
+        `Failed to fetch AI usage: HTTP ${response.status}`,
+        "GATEWAY_ERROR",
+        response.status,
+      );
     }
 
     return (await response.json()) as AppAIUsage;
   }
 
-  private emulateChat(messages: AIChatMessage[], options: AIChatOptions): AIChatResponse {
-    const userPrompt = messages.filter((m) => m.role === 'user').map((m) => m.content).join(' ');
-    const model = options.model || 'fake-llm';
+  private emulateChat(
+    messages: AIChatMessage[],
+    options: AIChatOptions,
+  ): AIChatResponse {
+    const userPrompt = messages
+      .filter((m) => m.role === "user")
+      .map((m) => m.content)
+      .join(" ");
+    const model = options.model || "fake-llm";
     const content = `[Local Emulator AI: ${model}] Simulated response to prompt: "${userPrompt.slice(0, 50)}..."`;
     const promptTokens = Math.max(1, Math.ceil(userPrompt.length / 4));
     const compTokens = Math.max(1, Math.ceil(content.length / 4));
@@ -300,12 +334,12 @@ export class PlatformAIClient {
       id: `emu-${Date.now()}`,
       model,
       content,
-      finish_reason: 'stop',
+      finish_reason: "stop",
       usage: {
         prompt_tokens: promptTokens,
         completion_tokens: compTokens,
         total_tokens: promptTokens + compTokens,
-        estimated_cost_usd: (promptTokens * 0.000001) + (compTokens * 0.000002),
+        estimated_cost_usd: promptTokens * 0.000001 + compTokens * 0.000002,
       },
     };
   }

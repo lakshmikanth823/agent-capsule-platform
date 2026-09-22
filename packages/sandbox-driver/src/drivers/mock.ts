@@ -11,21 +11,27 @@ import type {
   LogOptions,
   ForwardRequest,
   ForwardResponse,
-} from '../interface.js';
+} from "../interface.js";
 
 export class DevMockSandboxDriver implements SandboxDriver {
-  readonly name = 'dev-mock-driver';
+  readonly name = "dev-mock-driver";
   private instances = new Map<string, SandboxInstance>();
   private logsMap = new Map<string, string[]>();
-  private mockResponses = new Map<string, (req: ForwardRequest) => ForwardResponse>();
+  private mockResponses = new Map<
+    string,
+    (req: ForwardRequest) => ForwardResponse
+  >();
 
   constructor() {
     console.warn(
-      '[WARNING] DevMockSandboxDriver is an in-memory mock for testing only. It is NOT a security boundary.'
+      "[WARNING] DevMockSandboxDriver is an in-memory mock for testing only. It is NOT a security boundary.",
     );
   }
 
-  setMockResponse(path: string, handler: (req: ForwardRequest) => ForwardResponse): void {
+  setMockResponse(
+    path: string,
+    handler: (req: ForwardRequest) => ForwardResponse,
+  ): void {
     this.mockResponses.set(path, handler);
   }
 
@@ -36,7 +42,7 @@ export class DevMockSandboxDriver implements SandboxDriver {
       id,
       capsuleId: spec.capsuleId,
       versionId: spec.versionId,
-      status: 'running',
+      status: "running",
       spec,
       assignedPort: spec.port || 3000,
       createdAt: now,
@@ -51,28 +57,28 @@ export class DevMockSandboxDriver implements SandboxDriver {
   async stop(instanceId: string): Promise<void> {
     const inst = this.instances.get(instanceId);
     if (!inst) throw new Error(`Instance not found: ${instanceId}`);
-    inst.status = 'stopped';
+    inst.status = "stopped";
     this.logsMap.get(instanceId)?.push(`[mock] Container stopped`);
   }
 
   async suspend(instanceId: string): Promise<void> {
     const inst = this.instances.get(instanceId);
     if (!inst) throw new Error(`Instance not found: ${instanceId}`);
-    inst.status = 'suspended';
+    inst.status = "suspended";
     this.logsMap.get(instanceId)?.push(`[mock] Container suspended`);
   }
 
   async resume(instanceId: string): Promise<void> {
     const inst = this.instances.get(instanceId);
     if (!inst) throw new Error(`Instance not found: ${instanceId}`);
-    inst.status = 'running';
+    inst.status = "running";
     inst.lastActiveAt = new Date();
     this.logsMap.get(instanceId)?.push(`[mock] Container resumed`);
   }
 
   async status(instanceId: string): Promise<SandboxStatus> {
     const inst = this.instances.get(instanceId);
-    return inst ? inst.status : 'stopped';
+    return inst ? inst.status : "stopped";
   }
 
   async logs(instanceId: string, options?: LogOptions): Promise<string[]> {
@@ -83,11 +89,16 @@ export class DevMockSandboxDriver implements SandboxDriver {
     return all;
   }
 
-  async forwardRequest(instanceId: string, req: ForwardRequest): Promise<ForwardResponse> {
+  async forwardRequest(
+    instanceId: string,
+    req: ForwardRequest,
+  ): Promise<ForwardResponse> {
     const inst = this.instances.get(instanceId);
     if (!inst) throw new Error(`Instance not found: ${instanceId}`);
-    if (inst.status !== 'running') {
-      throw new Error(`Cannot forward request: instance ${instanceId} is ${inst.status}`);
+    if (inst.status !== "running") {
+      throw new Error(
+        `Cannot forward request: instance ${instanceId} is ${inst.status}`,
+      );
     }
     inst.lastActiveAt = new Date();
 
@@ -96,19 +107,19 @@ export class DevMockSandboxDriver implements SandboxDriver {
       return handler(req);
     }
 
-    if (req.path === '/health') {
+    if (req.path === "/health") {
       return {
         statusCode: 200,
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ status: 'healthy', capsule: inst.capsuleId }),
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ status: "healthy", capsule: inst.capsuleId }),
       };
     }
 
     return {
       statusCode: 200,
-      headers: { 'content-type': 'application/json' },
+      headers: { "content-type": "application/json" },
       body: JSON.stringify({
-        status: 'ok',
+        status: "ok",
         method: req.method,
         path: req.path,
         mock: true,
@@ -119,7 +130,7 @@ export class DevMockSandboxDriver implements SandboxDriver {
   async recover(instanceId: string): Promise<SandboxInstance> {
     const inst = this.instances.get(instanceId);
     if (!inst) throw new Error(`Instance not found: ${instanceId}`);
-    inst.status = 'running';
+    inst.status = "running";
     inst.lastActiveAt = new Date();
     this.logsMap.get(instanceId)?.push(`[mock] Container recovered from crash`);
     return inst;
@@ -133,4 +144,3 @@ export class DevMockSandboxDriver implements SandboxDriver {
 
 export const MockSandboxDriver = DevMockSandboxDriver;
 export type MockSandboxDriver = DevMockSandboxDriver;
-

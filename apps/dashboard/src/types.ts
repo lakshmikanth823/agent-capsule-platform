@@ -7,7 +7,7 @@ export interface UserProfile {
   email: string;
   name: string;
   organization_id: string;
-  platform_role: 'owner' | 'editor' | 'user';
+  platform_role: "owner" | "editor" | "user";
   token_type: string;
 }
 
@@ -18,7 +18,7 @@ export interface AppSummary {
   app_key: string;
   name: string;
   description?: string;
-  status: 'draft' | 'active' | 'suspended' | 'archived';
+  status: "draft" | "active" | "suspended" | "archived";
   shape: string;
   runtime: string;
   current_version_id?: string;
@@ -74,9 +74,9 @@ export interface AppShare {
   user_id?: string;
   user_email?: string;
   group_name?: string;
-  grant_type: 'user' | 'group';
+  grant_type: "user" | "group";
   app_role: string;
-  status: 'active' | 'revoked';
+  status: "active" | "revoked";
   granted_by_user_id?: string;
   granted_at: string;
   expires_at?: string;
@@ -247,5 +247,3 @@ export interface AppAIUsage {
     created_at: string;
   }>;
 }
-
-

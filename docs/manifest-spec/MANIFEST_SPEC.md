@@ -22,19 +22,19 @@ The same document can be represented as JSON and validated against:
 
 ## 3. Top-level fields
 
-| Field | Required | Meaning |
-|---|---|---|
-| `apiVersion` | Yes | Manifest contract version. `capsule/v1alpha1`. |
-| `id` | Yes | Stable Capsule identifier. |
-| `name` | Yes | Human-readable application name. |
-| `shape` | Yes | Blessed application shape. Alpha/MVP uses `web-app`. |
-| `runtime` | Yes | Blessed runtime. Alpha/MVP uses `node22`. |
-| `roles` | No | Application roles such as `employee`, `manager`, `hr`. |
-| `capabilities` | No | Requested platform capabilities. |
-| `egress` | No | Explicit network destinations. Empty means default-deny egress. |
-| `schedule` | No | Scheduled handlers. Scheduled execution is deferred in the roadmap until Phase 3. |
-| `sharing` | No | Default sharing policy. |
-| `limits` | No | Requested resource limits; platform/org policy may impose lower limits. |
+| Field          | Required | Meaning                                                                           |
+| -------------- | -------- | --------------------------------------------------------------------------------- |
+| `apiVersion`   | Yes      | Manifest contract version. `capsule/v1alpha1`.                                    |
+| `id`           | Yes      | Stable Capsule identifier.                                                        |
+| `name`         | Yes      | Human-readable application name.                                                  |
+| `shape`        | Yes      | Blessed application shape. Alpha/MVP uses `web-app`.                              |
+| `runtime`      | Yes      | Blessed runtime. Alpha/MVP uses `node22`.                                         |
+| `roles`        | No       | Application roles such as `employee`, `manager`, `hr`.                            |
+| `capabilities` | No       | Requested platform capabilities.                                                  |
+| `egress`       | No       | Explicit network destinations. Empty means default-deny egress.                   |
+| `schedule`     | No       | Scheduled handlers. Scheduled execution is deferred in the roadmap until Phase 3. |
+| `sharing`      | No       | Default sharing policy.                                                           |
+| `limits`       | No       | Requested resource limits; platform/org policy may impose lower limits.           |
 
 ## 4. Capability model
 

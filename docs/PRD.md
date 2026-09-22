@@ -1,4 +1,5 @@
 # Product Requirements Document (PRD)
+
 ## Software Capsule Platform
 
 **Document Version:** 0.2  
@@ -154,12 +155,12 @@ Needs:
 
 The previous MVP/Phase-0 scope is separated into distinct releases.
 
-| Release | Scope |
-|---|---|
-| **Alpha / Phase 0** | Publish, secure sandbox, Google/OIDC login, sharing, SQLite, basic origin isolation, validation |
-| **MVP / Phase 0 + 1** | Capabilities, egress control, roles, credential broker, versions, snapshots, rollback, quotas, kill switch |
-| **Company-ready / Phase 2** | Environment Profiles, enterprise SSO, SCIM, governance, audit, connector administration |
-| **Scale / Phase 3** | Expiry, ownership transfer, previews, budgets, PostgreSQL capability, additional runtimes, private data planes, templates/forking |
+| Release                     | Scope                                                                                                                             |
+| --------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| **Alpha / Phase 0**         | Publish, secure sandbox, Google/OIDC login, sharing, SQLite, basic origin isolation, validation                                   |
+| **MVP / Phase 0 + 1**       | Capabilities, egress control, roles, credential broker, versions, snapshots, rollback, quotas, kill switch                        |
+| **Company-ready / Phase 2** | Environment Profiles, enterprise SSO, SCIM, governance, audit, connector administration                                           |
+| **Scale / Phase 3**         | Expiry, ownership transfer, previews, budgets, PostgreSQL capability, additional runtimes, private data planes, templates/forking |
 
 Every functional requirement below has a **Priority** and **Phase**.
 
@@ -1469,13 +1470,13 @@ RPO and RTO targets MUST be finalized before production release.
 
 Initial targets:
 
-| Metric | Target |
-|---|---|
-| Publish → working URL | p95 < 30 seconds for reference app |
-| Share link → first render | < 60 seconds with active IdP session |
-| Cold start | p95 < 2 seconds |
-| Reference application bundle | < 5 MB |
-| Idle compute | Near-zero / storage-dominant |
+| Metric                       | Target                               |
+| ---------------------------- | ------------------------------------ |
+| Publish → working URL        | p95 < 30 seconds for reference app   |
+| Share link → first render    | < 60 seconds with active IdP session |
+| Cold start                   | p95 < 2 seconds                      |
+| Reference application bundle | < 5 MB                               |
+| Idle compute                 | Near-zero / storage-dominant         |
 
 The reference application MUST be clearly defined before benchmarking.
 
@@ -1834,39 +1835,39 @@ Not:
 
 # 31. Risks
 
-| Risk | Mitigation |
-|---|---|
-| Sandbox escape | Strong isolation + adversarial testing |
-| Cross-Capsule data access | Filesystem, database and network isolation |
-| Cross-origin session theft | Dedicated origins + host-isolated cookies |
-| Credential theft | Credential broker + no raw secrets |
-| Data exfiltration | Default-deny egress + proxy |
-| SSRF | Trusted DNS/destination validation |
-| Agent capability escalation | Human approval for capability changes |
-| Resource abuse | CPU/memory/storage/network quotas |
-| Malicious dependencies | Isolated build + dependency controls |
-| Application sprawl | Ownership + inventory + lifecycle controls |
-| Rollback data loss | Code-only default + recovery snapshot |
-| Publish failures | Blessed shape + emulator + validation |
-| High cold-start latency | Small runtime + sandbox spike |
-| Infrastructure complexity | Constrained application contract |
-| Connector misuse | Viewer identity default + explicit service identity |
-| Unmanaged applications | Ownership and deprovisioning policy |
+| Risk                        | Mitigation                                          |
+| --------------------------- | --------------------------------------------------- |
+| Sandbox escape              | Strong isolation + adversarial testing              |
+| Cross-Capsule data access   | Filesystem, database and network isolation          |
+| Cross-origin session theft  | Dedicated origins + host-isolated cookies           |
+| Credential theft            | Credential broker + no raw secrets                  |
+| Data exfiltration           | Default-deny egress + proxy                         |
+| SSRF                        | Trusted DNS/destination validation                  |
+| Agent capability escalation | Human approval for capability changes               |
+| Resource abuse              | CPU/memory/storage/network quotas                   |
+| Malicious dependencies      | Isolated build + dependency controls                |
+| Application sprawl          | Ownership + inventory + lifecycle controls          |
+| Rollback data loss          | Code-only default + recovery snapshot               |
+| Publish failures            | Blessed shape + emulator + validation               |
+| High cold-start latency     | Small runtime + sandbox spike                       |
+| Infrastructure complexity   | Constrained application contract                    |
+| Connector misuse            | Viewer identity default + explicit service identity |
+| Unmanaged applications      | Ownership and deprovisioning policy                 |
 
 ---
 
 # 32. Technical Decision Register
 
-| Decision | Owner | Due |
-|---|---|---|
-| Sandbox: Firecracker vs gVisor | Engineering/Security | Before Phase 0 implementation |
-| Exact application domain strategy | Security/Platform | Before Alpha |
-| Initial SQLite limits | Engineering | Before Alpha |
-| RPO/RTO targets | Product/Engineering | Before production |
-| AI providers/models | Product/Security | Before AI capability |
-| Connector identity model | Product/Security | Before connector launch |
-| Enterprise identity provider | Platform | Before Phase 2 |
-| Scheduled execution model | Engineering | Before Phase 3 |
+| Decision                          | Owner                | Due                           |
+| --------------------------------- | -------------------- | ----------------------------- |
+| Sandbox: Firecracker vs gVisor    | Engineering/Security | Before Phase 0 implementation |
+| Exact application domain strategy | Security/Platform    | Before Alpha                  |
+| Initial SQLite limits             | Engineering          | Before Alpha                  |
+| RPO/RTO targets                   | Product/Engineering  | Before production             |
+| AI providers/models               | Product/Security     | Before AI capability          |
+| Connector identity model          | Product/Security     | Before connector launch       |
+| Enterprise identity provider      | Platform             | Before Phase 2                |
+| Scheduled execution model         | Engineering          | Before Phase 3                |
 
 ### Sandbox Spike Evaluation
 

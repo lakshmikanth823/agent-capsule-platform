@@ -8,16 +8,16 @@
  * - Comprehensive network audit logging for every allowed and denied attempt.
  * - Supports both HTTP proxying and HTTPS CONNECT tunneling.
  */
-import http from 'node:http';
-import net from 'node:net';
-import { URL } from 'node:url';
-import { resolveAndValidateDestination } from './ssrf.js';
-import { evaluateEgressPolicy, EgressPolicy, EgressRule } from './policy.js';
-import { EgressLogger } from './logger.js';
+import http from "node:http";
+import net from "node:net";
+import { URL } from "node:url";
+import { resolveAndValidateDestination } from "./ssrf.js";
+import { evaluateEgressPolicy, EgressPolicy, EgressRule } from "./policy.js";
+import { EgressLogger } from "./logger.js";
 
-export * from './ssrf.js';
-export * from './policy.js';
-export * from './logger.js';
+export * from "./ssrf.js";
+export * from "./policy.js";
+export * from "./logger.js";
 
 export interface EgressProxyConfig {
   port?: number;
@@ -34,9 +34,13 @@ export class EgressPolicyManager {
   private appByteLimits = new Map<string, number>();
   public defaultDailyByteLimit = 100 * 1024 * 1024; // 100 MB default
 
-  registerAppPolicy(appKey: string, allowlist: (EgressRule | string)[], orgId?: string): void {
+  registerAppPolicy(
+    appKey: string,
+    allowlist: (EgressRule | string)[],
+    orgId?: string,
+  ): void {
     const normalizedRules: EgressRule[] = allowlist.map((r) =>
-      typeof r === 'string' ? { host: r } : r
+      typeof r === "string" ? { host: r } : r,
     );
 
     const orgCeiling = orgId ? this.orgCeilings.get(orgId) : undefined;
@@ -49,7 +53,16 @@ export class EgressPolicyManager {
     });
   }
 
-  setPolicy(appKey: string, policy: { appKey?: string; appAllowlist: (EgressRule | string)[]; orgCeiling?: EgressRule[]; orgId?: string; dailyByteLimit?: number }): void {
+  setPolicy(
+    appKey: string,
+    policy: {
+      appKey?: string;
+      appAllowlist: (EgressRule | string)[];
+      orgCeiling?: EgressRule[];
+      orgId?: string;
+      dailyByteLimit?: number;
+    },
+  ): void {
     this.registerAppPolicy(appKey, policy.appAllowlist, policy.orgId);
     if (policy.dailyByteLimit) {
       this.appByteLimits.set(appKey, policy.dailyByteLimit);
@@ -57,9 +70,8 @@ export class EgressPolicyManager {
   }
 
   setOrgCeiling(orgId: string, ceiling: (EgressRule | string)[]): void {
-
     const normalizedCeiling: EgressRule[] = ceiling.map((r) =>
-      typeof r === 'string' ? { host: r } : r
+      typeof r === "string" ? { host: r } : r,
     );
     this.orgCeilings.set(orgId, normalizedCeiling);
 
@@ -94,15 +106,25 @@ export class EgressPolicyManager {
   isAppSuspended(appKey: string): boolean {
     if (this.suspendedApps.has(appKey)) return true;
     const policy = this.appPolicies.get(appKey);
-    if (policy && policy.orgId && this.frozenOrgs.has(policy.orgId)) return true;
+    if (policy && policy.orgId && this.frozenOrgs.has(policy.orgId))
+      return true;
     return false;
   }
 
-
-  checkAndTrackEgress(appKey: string, bytes: number, limitBytes?: number): { allowed: boolean; currentBytes: number; limitBytes: number } {
-    const limit = limitBytes || this.appByteLimits.get(appKey) || this.defaultDailyByteLimit;
+  checkAndTrackEgress(
+    appKey: string,
+    bytes: number,
+    limitBytes?: number,
+  ): { allowed: boolean; currentBytes: number; limitBytes: number } {
+    const limit =
+      limitBytes ||
+      this.appByteLimits.get(appKey) ||
+      this.defaultDailyByteLimit;
     const now = Date.now();
-    const usage = this.egressUsage.get(appKey) || { bytes: 0, resetAt: now + 86400000 };
+    const usage = this.egressUsage.get(appKey) || {
+      bytes: 0,
+      resetAt: now + 86400000,
+    };
 
     // Reset daily counter if expired
     if (now > usage.resetAt) {
@@ -133,7 +155,6 @@ export class EgressPolicyManager {
   }
 }
 
-
 export function createEgressProxyServer(options: {
   config?: EgressProxyConfig;
   policyManager?: EgressPolicyManager;
@@ -147,43 +168,50 @@ export function createEgressProxyServer(options: {
   function extractAppKey(req: http.IncomingMessage): string {
     // 1. Check custom headers
     const appKeyHeader =
-      req.headers['x-capsule-key'] ||
-      req.headers['x-capsule-id'] ||
-      req.headers['x-capsule-app-key'];
-    if (appKeyHeader && typeof appKeyHeader === 'string') {
+      req.headers["x-capsule-key"] ||
+      req.headers["x-capsule-id"] ||
+      req.headers["x-capsule-app-key"];
+    if (appKeyHeader && typeof appKeyHeader === "string") {
       return appKeyHeader;
     }
 
     // 2. Check Proxy-Authorization header (e.g. Basic base64(appKey:token))
-    const proxyAuth = req.headers['proxy-authorization'];
-    if (proxyAuth && proxyAuth.startsWith('Basic ')) {
+    const proxyAuth = req.headers["proxy-authorization"];
+    if (proxyAuth && proxyAuth.startsWith("Basic ")) {
       try {
-        const decoded = Buffer.from(proxyAuth.substring(6), 'base64').toString('utf-8');
-        const [appKey] = decoded.split(':');
+        const decoded = Buffer.from(proxyAuth.substring(6), "base64").toString(
+          "utf-8",
+        );
+        const [appKey] = decoded.split(":");
         if (appKey) return appKey;
       } catch {
         // ignore
       }
     }
 
-    return 'unknown-app';
+    return "unknown-app";
   }
 
   const server = http.createServer(async (req, res) => {
     const appKey = extractAppKey(req);
-    const method = req.method || 'GET';
+    const method = req.method || "GET";
 
     let targetUrl: URL;
     try {
-      targetUrl = new URL(req.url || '/');
+      targetUrl = new URL(req.url || "/");
     } catch {
       // If relative path, try using Host header
-      const host = req.headers.host || 'unknown';
+      const host = req.headers.host || "unknown";
       try {
         targetUrl = new URL(`http://${host}${req.url}`);
       } catch {
-        res.writeHead(400, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: 'BAD_REQUEST', message: 'Malformed target URL' }));
+        res.writeHead(400, { "Content-Type": "application/json" });
+        res.end(
+          JSON.stringify({
+            error: "BAD_REQUEST",
+            message: "Malformed target URL",
+          }),
+        );
         return;
       }
     }
@@ -191,13 +219,13 @@ export function createEgressProxyServer(options: {
     const targetHost = targetUrl.hostname;
     const targetPort = targetUrl.port
       ? parseInt(targetUrl.port, 10)
-      : targetUrl.protocol === 'https:'
-      ? 443
-      : 80;
+      : targetUrl.protocol === "https:"
+        ? 443
+        : 80;
 
     // 0. Kill Switch & Suspension Check
     const orgId =
-      (req.headers['x-capsule-org-id'] as string) ||
+      (req.headers["x-capsule-org-id"] as string) ||
       policyManager.getPolicy(appKey)?.orgId;
     if (orgId && policyManager.isOrgFrozen(orgId)) {
       logger.logEvent({
@@ -205,16 +233,16 @@ export function createEgressProxyServer(options: {
         method,
         host: targetHost,
         port: targetPort,
-        decision: 'denied',
-        reason: 'Organization is frozen',
+        decision: "denied",
+        reason: "Organization is frozen",
       });
-      res.writeHead(403, { 'Content-Type': 'application/json' });
+      res.writeHead(403, { "Content-Type": "application/json" });
       res.end(
         JSON.stringify({
-          error: 'ORGANIZATION_FROZEN',
-          code: 'ORGANIZATION_FROZEN',
+          error: "ORGANIZATION_FROZEN",
+          code: "ORGANIZATION_FROZEN",
           message: `Egress is blocked because organization '${orgId}' is frozen.`,
-        })
+        }),
       );
       return;
     }
@@ -225,43 +253,48 @@ export function createEgressProxyServer(options: {
         method,
         host: targetHost,
         port: targetPort,
-        decision: 'denied',
-        reason: 'Capsule is suspended',
+        decision: "denied",
+        reason: "Capsule is suspended",
       });
-      res.writeHead(403, { 'Content-Type': 'application/json' });
+      res.writeHead(403, { "Content-Type": "application/json" });
       res.end(
         JSON.stringify({
-          error: 'APP_SUSPENDED',
-          code: 'APP_SUSPENDED',
+          error: "APP_SUSPENDED",
+          code: "APP_SUSPENDED",
           message: `Egress is blocked because capsule '${appKey}' is suspended.`,
-        })
+        }),
       );
       return;
     }
 
-
     // 0.1 Daily Egress Quota Check
-    const estimatedBytes = (req.headers['content-length'] ? parseInt(req.headers['content-length'] as string, 10) : 0) + 1024;
-    const quotaCheck = policyManager.checkAndTrackEgress(appKey, estimatedBytes);
+    const estimatedBytes =
+      (req.headers["content-length"]
+        ? parseInt(req.headers["content-length"] as string, 10)
+        : 0) + 1024;
+    const quotaCheck = policyManager.checkAndTrackEgress(
+      appKey,
+      estimatedBytes,
+    );
     if (!quotaCheck.allowed) {
       logger.logEvent({
         appKey,
         method,
         host: targetHost,
         port: targetPort,
-        decision: 'denied',
-        reason: 'Daily egress byte quota exceeded',
+        decision: "denied",
+        reason: "Daily egress byte quota exceeded",
       });
-      res.writeHead(403, { 'Content-Type': 'application/json' });
+      res.writeHead(403, { "Content-Type": "application/json" });
       res.end(
         JSON.stringify({
-          error: 'QUOTA_EXCEEDED',
-          code: 'QUOTA_EXCEEDED',
-          metric: 'egress_bytes_per_day',
+          error: "QUOTA_EXCEEDED",
+          code: "QUOTA_EXCEEDED",
+          metric: "egress_bytes_per_day",
           limit_bytes: quotaCheck.limitBytes,
           current_bytes: quotaCheck.currentBytes,
           message: `Daily egress quota of ${Math.round(quotaCheck.limitBytes / (1024 * 1024))}MB exceeded for capsule '${appKey}'.`,
-        })
+        }),
       );
       return;
     }
@@ -280,24 +313,27 @@ export function createEgressProxyServer(options: {
         method,
         host: targetHost,
         port: targetPort,
-        decision: 'denied',
+        decision: "denied",
         reason: evaluation.reason,
       });
 
-      res.writeHead(403, { 'Content-Type': 'application/json' });
+      res.writeHead(403, { "Content-Type": "application/json" });
       res.end(
         JSON.stringify({
-          error: 'EGRESS_DENIED',
-          code: 'EGRESS_DENIED',
+          error: "EGRESS_DENIED",
+          code: "EGRESS_DENIED",
           message: evaluation.reason,
           destination: `${targetHost}:${targetPort}`,
-        })
+        }),
       );
       return;
     }
 
     // 2. Connection-time SSRF & DNS Rebinding Check
-    const ssrfCheck = await resolveAndValidateDestination(targetHost, dnsResolver);
+    const ssrfCheck = await resolveAndValidateDestination(
+      targetHost,
+      dnsResolver,
+    );
     if (!ssrfCheck.valid || !ssrfCheck.ip) {
       logger.logEvent({
         appKey,
@@ -305,18 +341,18 @@ export function createEgressProxyServer(options: {
         host: targetHost,
         port: targetPort,
         destinationIp: ssrfCheck.ip,
-        decision: 'denied',
-        reason: ssrfCheck.reason || 'SSRF blocked',
+        decision: "denied",
+        reason: ssrfCheck.reason || "SSRF blocked",
       });
 
-      res.writeHead(403, { 'Content-Type': 'application/json' });
+      res.writeHead(403, { "Content-Type": "application/json" });
       res.end(
         JSON.stringify({
-          error: 'SSRF_BLOCKED',
-          code: 'SSRF_BLOCKED',
+          error: "SSRF_BLOCKED",
+          code: "SSRF_BLOCKED",
           message: ssrfCheck.reason,
           destination: `${targetHost}:${targetPort}`,
-        })
+        }),
       );
       return;
     }
@@ -328,7 +364,7 @@ export function createEgressProxyServer(options: {
       host: targetHost,
       port: targetPort,
       destinationIp: ssrfCheck.ip,
-      decision: 'allowed',
+      decision: "allowed",
       reason: evaluation.reason,
     });
 
@@ -346,34 +382,34 @@ export function createEgressProxyServer(options: {
       (proxyRes) => {
         res.writeHead(proxyRes.statusCode || 200, proxyRes.headers);
         proxyRes.pipe(res);
-      }
+      },
     );
 
-    proxyReq.on('error', (err) => {
-      res.writeHead(502, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ error: 'BAD_GATEWAY', message: err.message }));
+    proxyReq.on("error", (err) => {
+      res.writeHead(502, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: "BAD_GATEWAY", message: err.message }));
     });
 
     req.pipe(proxyReq);
   });
 
   // Handle HTTPS CONNECT Tunneling
-  server.on('connect', async (req, clientSocket, head) => {
+  server.on("connect", async (req, clientSocket, head) => {
     const appKey = extractAppKey(req);
-    const method = 'CONNECT';
+    const method = "CONNECT";
 
-    const [targetHost, portStr] = (req.url || '').split(':');
+    const [targetHost, portStr] = (req.url || "").split(":");
     const targetPort = portStr ? parseInt(portStr, 10) : 443;
 
     if (!targetHost) {
-      clientSocket.write('HTTP/1.1 400 Bad Request\r\n\r\n');
+      clientSocket.write("HTTP/1.1 400 Bad Request\r\n\r\n");
       clientSocket.end();
       return;
     }
 
     // 0. Kill Switch & Suspension Check
     const orgId =
-      (req.headers['x-capsule-org-id'] as string) ||
+      (req.headers["x-capsule-org-id"] as string) ||
       policyManager.getPolicy(appKey)?.orgId;
     if (orgId && policyManager.isOrgFrozen(orgId)) {
       logger.logEvent({
@@ -381,11 +417,11 @@ export function createEgressProxyServer(options: {
         method,
         host: targetHost,
         port: targetPort,
-        decision: 'denied',
-        reason: 'Organization is frozen',
+        decision: "denied",
+        reason: "Organization is frozen",
       });
       clientSocket.write(
-        'HTTP/1.1 403 Forbidden\r\nContent-Type: application/json\r\n\r\n{"error":"ORGANIZATION_FROZEN","code":"ORGANIZATION_FROZEN","message":"Egress blocked because organization is frozen."}'
+        'HTTP/1.1 403 Forbidden\r\nContent-Type: application/json\r\n\r\n{"error":"ORGANIZATION_FROZEN","code":"ORGANIZATION_FROZEN","message":"Egress blocked because organization is frozen."}',
       );
       clientSocket.end();
       return;
@@ -397,16 +433,15 @@ export function createEgressProxyServer(options: {
         method,
         host: targetHost,
         port: targetPort,
-        decision: 'denied',
-        reason: 'Capsule is suspended',
+        decision: "denied",
+        reason: "Capsule is suspended",
       });
       clientSocket.write(
-        'HTTP/1.1 403 Forbidden\r\nContent-Type: application/json\r\n\r\n{"error":"APP_SUSPENDED","code":"APP_SUSPENDED","message":"Egress blocked because capsule is suspended."}'
+        'HTTP/1.1 403 Forbidden\r\nContent-Type: application/json\r\n\r\n{"error":"APP_SUSPENDED","code":"APP_SUSPENDED","message":"Egress blocked because capsule is suspended."}',
       );
       clientSocket.end();
       return;
     }
-
 
     // 0.1 Daily Quota Check
     const quotaCheck = policyManager.checkAndTrackEgress(appKey, 4096);
@@ -416,11 +451,11 @@ export function createEgressProxyServer(options: {
         method,
         host: targetHost,
         port: targetPort,
-        decision: 'denied',
-        reason: 'Daily egress byte quota exceeded',
+        decision: "denied",
+        reason: "Daily egress byte quota exceeded",
       });
       clientSocket.write(
-        `HTTP/1.1 403 Forbidden\r\nContent-Type: application/json\r\n\r\n{"error":"QUOTA_EXCEEDED","code":"QUOTA_EXCEEDED","metric":"egress_bytes_per_day","limit_bytes":${quotaCheck.limitBytes},"current_bytes":${quotaCheck.currentBytes}}`
+        `HTTP/1.1 403 Forbidden\r\nContent-Type: application/json\r\n\r\n{"error":"QUOTA_EXCEEDED","code":"QUOTA_EXCEEDED","metric":"egress_bytes_per_day","limit_bytes":${quotaCheck.limitBytes},"current_bytes":${quotaCheck.currentBytes}}`,
       );
       clientSocket.end();
       return;
@@ -440,19 +475,22 @@ export function createEgressProxyServer(options: {
         method,
         host: targetHost,
         port: targetPort,
-        decision: 'denied',
+        decision: "denied",
         reason: evaluation.reason,
       });
 
       clientSocket.write(
-        `HTTP/1.1 403 Forbidden\r\nContent-Type: application/json\r\n\r\n{"error":"EGRESS_DENIED","message":"${evaluation.reason}"}`
+        `HTTP/1.1 403 Forbidden\r\nContent-Type: application/json\r\n\r\n{"error":"EGRESS_DENIED","message":"${evaluation.reason}"}`,
       );
       clientSocket.end();
       return;
     }
 
     // 2. SSRF & DNS Rebinding Check at connection time
-    const ssrfCheck = await resolveAndValidateDestination(targetHost, dnsResolver);
+    const ssrfCheck = await resolveAndValidateDestination(
+      targetHost,
+      dnsResolver,
+    );
     if (!ssrfCheck.valid || !ssrfCheck.ip) {
       logger.logEvent({
         appKey,
@@ -460,12 +498,12 @@ export function createEgressProxyServer(options: {
         host: targetHost,
         port: targetPort,
         destinationIp: ssrfCheck.ip,
-        decision: 'denied',
-        reason: ssrfCheck.reason || 'SSRF blocked',
+        decision: "denied",
+        reason: ssrfCheck.reason || "SSRF blocked",
       });
 
       clientSocket.write(
-        `HTTP/1.1 403 Forbidden\r\nContent-Type: application/json\r\n\r\n{"error":"SSRF_BLOCKED","message":"${ssrfCheck.reason}"}`
+        `HTTP/1.1 403 Forbidden\r\nContent-Type: application/json\r\n\r\n{"error":"SSRF_BLOCKED","message":"${ssrfCheck.reason}"}`,
       );
       clientSocket.end();
       return;
@@ -478,12 +516,12 @@ export function createEgressProxyServer(options: {
       host: targetHost,
       port: targetPort,
       destinationIp: ssrfCheck.ip,
-      decision: 'allowed',
+      decision: "allowed",
       reason: evaluation.reason,
     });
 
     const targetSocket = net.connect(targetPort, ssrfCheck.ip, () => {
-      clientSocket.write('HTTP/1.1 200 Connection Established\r\n\r\n');
+      clientSocket.write("HTTP/1.1 200 Connection Established\r\n\r\n");
       if (head && head.length > 0) {
         targetSocket.write(head);
       }
@@ -491,12 +529,12 @@ export function createEgressProxyServer(options: {
       clientSocket.pipe(targetSocket);
     });
 
-    targetSocket.on('error', () => {
-      clientSocket.write('HTTP/1.1 502 Bad Gateway\r\n\r\n');
+    targetSocket.on("error", () => {
+      clientSocket.write("HTTP/1.1 502 Bad Gateway\r\n\r\n");
       clientSocket.end();
     });
 
-    clientSocket.on('error', () => {
+    clientSocket.on("error", () => {
       targetSocket.end();
     });
   });

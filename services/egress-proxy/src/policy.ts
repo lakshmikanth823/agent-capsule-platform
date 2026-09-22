@@ -28,7 +28,10 @@ export interface PolicyEvaluation {
  * Checks if a target host matches a policy pattern.
  * Supports exact matches ("api.example.com") and wildcard prefixes ("*.example.com").
  */
-export function matchesHostPattern(targetHost: string, pattern: string): boolean {
+export function matchesHostPattern(
+  targetHost: string,
+  pattern: string,
+): boolean {
   const cleanTarget = targetHost.toLowerCase().trim();
   const cleanPattern = pattern.toLowerCase().trim();
 
@@ -36,10 +39,10 @@ export function matchesHostPattern(targetHost: string, pattern: string): boolean
     return true;
   }
 
-  if (cleanPattern.startsWith('*.')) {
+  if (cleanPattern.startsWith("*.")) {
     const rootDomain = cleanPattern.slice(2);
     // Matches subdomain (e.g. "sub.example.com" matches "*.example.com")
-    if (cleanTarget.endsWith('.' + rootDomain)) {
+    if (cleanTarget.endsWith("." + rootDomain)) {
       return true;
     }
   }
@@ -51,7 +54,10 @@ export function matchesHostPattern(targetHost: string, pattern: string): boolean
  * Checks if a target port matches allowed ports for a rule.
  * Defaults to standard web ports [80, 443] if ports list is omitted.
  */
-export function matchesPort(targetPort: number, allowedPorts?: number[]): boolean {
+export function matchesPort(
+  targetPort: number,
+  allowedPorts?: number[],
+): boolean {
   if (!allowedPorts || allowedPorts.length === 0) {
     return targetPort === 80 || targetPort === 443;
   }
@@ -64,10 +70,13 @@ export function matchesPort(targetPort: number, allowedPorts?: number[]): boolea
 export function isAllowedByRules(
   targetHost: string,
   targetPort: number,
-  rules: EgressRule[]
+  rules: EgressRule[],
 ): { allowed: boolean; rule?: EgressRule } {
   for (const rule of rules) {
-    if (matchesHostPattern(targetHost, rule.host) && matchesPort(targetPort, rule.ports)) {
+    if (
+      matchesHostPattern(targetHost, rule.host) &&
+      matchesPort(targetPort, rule.ports)
+    ) {
       return { allowed: true, rule };
     }
   }
@@ -84,7 +93,7 @@ export function isAllowedByRules(
 export function evaluateEgressPolicy(
   targetHost: string,
   targetPort: number,
-  policy: EgressPolicy
+  policy: EgressPolicy,
 ): PolicyEvaluation {
   // 1. Default Deny: App must explicitly allow the destination
   if (!policy.appAllowlist || policy.appAllowlist.length === 0) {
@@ -94,7 +103,11 @@ export function evaluateEgressPolicy(
     };
   }
 
-  const appCheck = isAllowedByRules(targetHost, targetPort, policy.appAllowlist);
+  const appCheck = isAllowedByRules(
+    targetHost,
+    targetPort,
+    policy.appAllowlist,
+  );
   if (!appCheck.allowed) {
     return {
       allowed: false,
@@ -104,7 +117,11 @@ export function evaluateEgressPolicy(
 
   // 2. Organization Ceiling Check: App can narrow org policy, but never widen it
   if (policy.orgCeiling !== undefined) {
-    const orgCheck = isAllowedByRules(targetHost, targetPort, policy.orgCeiling);
+    const orgCheck = isAllowedByRules(
+      targetHost,
+      targetPort,
+      policy.orgCeiling,
+    );
     if (!orgCheck.allowed) {
       return {
         allowed: false,

@@ -2,9 +2,9 @@
  * CLI Configuration Management
  * Stores session tokens and API URLs in ~/.capsule/config.json.
  */
-import fs from 'node:fs';
-import path from 'node:path';
-import os from 'node:os';
+import fs from "node:fs";
+import path from "node:path";
+import os from "node:os";
 
 export interface CliConfig {
   apiUrl: string;
@@ -25,16 +25,17 @@ function getConfigDir(): string {
   if (process.env.CAPSULE_CONFIG_DIR) {
     return path.resolve(process.env.CAPSULE_CONFIG_DIR);
   }
-  return path.join(os.homedir(), '.capsule');
+  return path.join(os.homedir(), ".capsule");
 }
 
 function getConfigPath(): string {
-  return path.join(getConfigDir(), 'config.json');
+  return path.join(getConfigDir(), "config.json");
 }
 
 export function loadConfig(): CliConfig {
   const configPath = getConfigPath();
-  const defaultApiUrl = process.env.CONTROL_PLANE_URL || 'http://localhost:8000';
+  const defaultApiUrl =
+    process.env.CONTROL_PLANE_URL || "http://localhost:8000";
   const envToken = process.env.CAPSULE_TOKEN || process.env.CAPSULE_API_KEY;
 
   if (!fs.existsSync(configPath)) {
@@ -45,7 +46,7 @@ export function loadConfig(): CliConfig {
   }
 
   try {
-    const raw = fs.readFileSync(configPath, 'utf8');
+    const raw = fs.readFileSync(configPath, "utf8");
     const parsed = JSON.parse(raw);
     return {
       apiUrl: process.env.CONTROL_PLANE_URL || parsed.apiUrl || defaultApiUrl,
@@ -73,7 +74,7 @@ export function saveConfig(updates: Partial<CliConfig>): CliConfig {
     fs.mkdirSync(dir, { recursive: true });
   }
 
-  fs.writeFileSync(getConfigPath(), JSON.stringify(merged, null, 2), 'utf8');
+  fs.writeFileSync(getConfigPath(), JSON.stringify(merged, null, 2), "utf8");
   return merged;
 }
 

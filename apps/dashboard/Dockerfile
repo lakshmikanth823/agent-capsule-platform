@@ -3,20 +3,17 @@ FROM node:22-slim AS builder
 
 WORKDIR /build
 
-COPY package.json package-lock.json ./
+COPY package.json package-lock.json tsconfig.base.json ./
+COPY packages/ packages/
 COPY apps/dashboard/package.json apps/dashboard/
 COPY apps/dashboard/tsconfig*.json apps/dashboard/
-COPY apps/dashboard/vite.config* apps/dashboard/ 2>/dev/null || true
-COPY tsconfig.base.json ./
-
-# Also copy SDK (dashboard imports it)
-COPY packages/ packages/
+COPY apps/dashboard/vite.config.ts apps/dashboard/
+COPY apps/dashboard/postcss.config.js apps/dashboard/tailwind.config.js apps/dashboard/
 
 RUN npm ci --workspace=apps/dashboard --include-workspace-root
 
+COPY apps/dashboard/index.html apps/dashboard/
 COPY apps/dashboard/src/ apps/dashboard/src/
-COPY apps/dashboard/index.html apps/dashboard/ 2>/dev/null || true
-COPY apps/dashboard/public/ apps/dashboard/public/ 2>/dev/null || true
 
 RUN npm run build --workspace=apps/dashboard
 

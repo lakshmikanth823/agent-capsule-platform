@@ -1,8 +1,10 @@
 # Review Protocols Between Prompts and Phases
 
 ## After Every Prompt (New Review Task)
+
 Review the last changes against `docs/TRD.md`, the API/CLI spec (`docs/api-cli-spec/`), and the PRD (`docs/PRD.md`).
 List:
+
 1. **Deviations**: Any deviation from the docs
 2. **Security Violations**: Any violation of the security invariants in the project rules
 3. **Missing Tests**: Missing unit, integration, or contract tests
@@ -14,8 +16,10 @@ List:
 ---
 
 ## After Each Phase (New Review Task)
+
 Act as a senior security engineer doing a pre-release review of this repository.
 Inspect for:
+
 - Authentication and authorization bypasses
 - Injection vulnerabilities (SQL, command, template, etc.)
 - Unsafe deserialization

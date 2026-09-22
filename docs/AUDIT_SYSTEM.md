@@ -20,6 +20,7 @@ Each audit event within an organization is linked to the previous event through 
 ```
 
 ### Deterministic Hash Calculation
+
 To ensure that verification produces identical digests across time, systems, and languages, the payload is normalized using canonical JSON serialization (`sort_keys=True, separators=(',', ':')`):
 
 ```python
@@ -44,6 +45,7 @@ event_hash = sha256(canonical_json(canonical_payload))
 ```
 
 ### Genesis and Sequence Continuity
+
 - **Genesis Event**: The first event recorded for any organization has `sequence_number = 1` and `prev_hash = "0" * 64`.
 - **Monotonic Sequencing**: Each subsequent event receives `sequence_number = prev_seq + 1` and `prev_hash = prev_event.event_hash`.
 - **Gap Detection**: If an event is deleted from the middle of the chain, the sequence gap is immediately identified during verification.
@@ -70,6 +72,7 @@ At the storage layer, the database enforces append-only immutability via a Postg
 Organizations can configure their retention policy via `Organization.audit_retention_days` (default: 90 days).
 
 When the scheduled retention service runs:
+
 1. Prunes records where `occurred_at < (now - retention_days)`.
 2. Before deleting the records, records an `OrganizationAuditCheckpoint`:
    - `checkpoint_sequence`: The sequence number of the latest deleted event.
@@ -84,6 +87,7 @@ When the scheduled retention service runs:
 ## 4. Multi-Layer Credential Redaction
 
 Before any audit record is persisted, its `metadata` passes through recursive redaction (`redact_audit_metadata`):
+
 - **Key Pattern Redaction**: Keys matching `token`, `secret`, `password`, `key`, `session`, `ticket`, `credential`, `auth`, `jwt`, `cookie`, `bearer`, or `private` are masked with `"[REDACTED]"`. Safe manifest and routing keys (`app_key`, `capability_key`, `key_id`, `idempotency_key`) are allowlisted.
 - **Value Pattern Redaction**: String values matching JWT patterns (`eyJ...`), Bearer headers, UUID session tokens (`sess_...`), or API keys (`sk-...`, `ghp_...`, `cap_...`) are detected and replaced with `"[REDACTED]"`.
 - **Validation**: Verified by an automated 1,000-event redaction scanner test confirming 0 credential leaks across all scenarios.
@@ -93,6 +97,7 @@ Before any audit record is persisted, its `metadata` passes through recursive re
 ## 5. Streaming SIEM Webhooks
 
 For organizations utilizing external log aggregators (Datadog, Splunk, Sumo Logic, Elastic):
+
 - **Configuration**: `PUT /v1/organizations/{org_id}/audit/webhook` sets the destination URL and secret token.
 - **HMAC-SHA256 Signatures**: Each webhook payload is signed with header `X-Capsule-Signature: sha256=<hex_digest>`.
 - **Headers**:
@@ -105,13 +110,13 @@ For organizations utilizing external log aggregators (Datadog, Splunk, Sumo Logi
 
 ## 6. Role-Based Access Matrix
 
-| Role | Scope | Verify Chain | Enforce Retention | Manage Webhooks | Export Logs |
-| :--- | :--- | :---: | :---: | :---: | :---: |
-| **Organization Owner** | All events in organization | Yes | Yes | Yes | Yes |
-| **Organization Editor** | All events in organization | Yes | Yes | Yes | Yes |
-| **App Owner** | Events for owned applications only | No (403) | No (403) | No (403) | Scoped to owned apps |
-| **Non-Owner Member** | None (403 Forbidden) | No (403) | No (403) | No (403) | No (403) |
-| **External Org** | None (403 Forbidden) | No (403) | No (403) | No (403) | No (403) |
+| Role                    | Scope                              | Verify Chain | Enforce Retention | Manage Webhooks |     Export Logs      |
+| :---------------------- | :--------------------------------- | :----------: | :---------------: | :-------------: | :------------------: |
+| **Organization Owner**  | All events in organization         |     Yes      |        Yes        |       Yes       |         Yes          |
+| **Organization Editor** | All events in organization         |     Yes      |        Yes        |       Yes       |         Yes          |
+| **App Owner**           | Events for owned applications only |   No (403)   |     No (403)      |    No (403)     | Scoped to owned apps |
+| **Non-Owner Member**    | None (403 Forbidden)               |   No (403)   |     No (403)      |    No (403)     |       No (403)       |
+| **External Org**        | None (403 Forbidden)               |   No (403)   |     No (403)      |    No (403)     |       No (403)       |
 
 ---
 

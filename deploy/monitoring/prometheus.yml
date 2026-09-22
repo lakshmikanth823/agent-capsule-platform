@@ -9,7 +9,7 @@ global:
 alerting:
   alertmanagers:
     - static_configs:
-        - targets: ['alertmanager:9093']
+        - targets: ["alertmanager:9093"]
 
 # Rules files
 rule_files:
@@ -19,37 +19,37 @@ scrape_configs:
   # ── Prometheus self-monitoring ─────────────────────────────────────────────
   - job_name: prometheus
     static_configs:
-      - targets: ['localhost:9090']
+      - targets: ["localhost:9090"]
 
   # ── Control Plane (FastAPI) ───────────────────────────────────────────────
   - job_name: control-plane
     static_configs:
-      - targets: ['control-plane:8000']
+      - targets: ["control-plane:8000"]
     metrics_path: /metrics
     scrape_interval: 15s
 
   # ── Edge Proxy ────────────────────────────────────────────────────────────
   - job_name: edge-proxy
     static_configs:
-      - targets: ['edge-proxy:8080']
+      - targets: ["edge-proxy:8080"]
     metrics_path: /metrics
     scrape_interval: 15s
 
   # ── Egress Proxy ──────────────────────────────────────────────────────────
   - job_name: egress-proxy
     static_configs:
-      - targets: ['egress-proxy:3128']
+      - targets: ["egress-proxy:3128"]
     metrics_path: /metrics
     scrape_interval: 15s
 
   # ── Builder ──────────────────────────────────────────────────────────────
   - job_name: builder
     static_configs:
-      - targets: ['builder:8090']
+      - targets: ["builder:8090"]
     metrics_path: /metrics
     scrape_interval: 30s
 
   # ── Node Exporter (host metrics) ──────────────────────────────────────────
   - job_name: node-exporter
     static_configs:
-      - targets: ['node-exporter:9100']
+      - targets: ["node-exporter:9100"]

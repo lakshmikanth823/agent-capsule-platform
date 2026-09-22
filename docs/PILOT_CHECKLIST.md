@@ -2,7 +2,7 @@
 
 **Document Version:** 1.0 — Pre-Pilot  
 **Date:** 2026-09-22  
-**Audience:** First pilot customer team and their technical lead  
+**Audience:** First pilot customer team and their technical lead
 
 > [!CAUTION]
 > This is a pre-general-availability platform. Some production hardening items are still outstanding (see docs/SECURITY_REVIEW_FINAL.md). Review Known Limits carefully before deploying any application that handles regulated or sensitive data.
@@ -29,29 +29,29 @@ The Capsule Platform lets your team publish internal web applications as **capsu
 
 ### Hard Limits (enforced, cannot be changed without a platform update)
 
-| Limit | Value |
-|---|---|
-| App shape | `web-app` only (no background workers, no scheduled jobs, no pub/sub in Phase 0–1) |
-| Runtime | Node.js 22 only |
-| Memory per app | 256 MB default; 512 MB maximum configurable via manifest |
-| CPU per app | 0.5 vCPU default; 2.0 vCPU maximum |
-| Disk (SQLite) | 50 MB default; 200 MB maximum configurable per manifest |
-| File storage (blobs) | 100 MB per app |
-| Egress bandwidth | 100 MB/day default per app |
-| Processes per container | 64 maximum (`--pids-limit`) |
-| LLM monthly budget | Per-app budget declared in manifest |
-| LLM models | Only models allowed by your Environment Profile |
+| Limit                   | Value                                                                              |
+| ----------------------- | ---------------------------------------------------------------------------------- |
+| App shape               | `web-app` only (no background workers, no scheduled jobs, no pub/sub in Phase 0–1) |
+| Runtime                 | Node.js 22 only                                                                    |
+| Memory per app          | 256 MB default; 512 MB maximum configurable via manifest                           |
+| CPU per app             | 0.5 vCPU default; 2.0 vCPU maximum                                                 |
+| Disk (SQLite)           | 50 MB default; 200 MB maximum configurable per manifest                            |
+| File storage (blobs)    | 100 MB per app                                                                     |
+| Egress bandwidth        | 100 MB/day default per app                                                         |
+| Processes per container | 64 maximum (`--pids-limit`)                                                        |
+| LLM monthly budget      | Per-app budget declared in manifest                                                |
+| LLM models              | Only models allowed by your Environment Profile                                    |
 
 ### Soft Limits (defaults; can be adjusted by your org admin)
 
-| Limit | Default | Configurable |
-|---|---|---|
-| Apps per organization | 100 | Yes — contact platform support |
-| Versions per app retained | 50 | Yes |
-| Audit log retention | 90 days | Yes (minimum: 30 days) |
-| Share expiry | Never (unless set) | Yes per share |
-| Inactivity expiry | 90 days | Yes per app or org default |
-| Content logging for AI | Off | Opt-in per org |
+| Limit                     | Default            | Configurable                   |
+| ------------------------- | ------------------ | ------------------------------ |
+| Apps per organization     | 100                | Yes — contact platform support |
+| Versions per app retained | 50                 | Yes                            |
+| Audit log retention       | 90 days            | Yes (minimum: 30 days)         |
+| Share expiry              | Never (unless set) | Yes per share                  |
+| Inactivity expiry         | 90 days            | Yes per app or org default     |
+| Content logging for AI    | Off                | Opt-in per org                 |
 
 ### Architectural Limits (not configurable)
 
@@ -88,13 +88,13 @@ The Capsule Platform lets your team publish internal web applications as **capsu
 > [!WARNING]
 > The following items from docs/SECURITY_REVIEW_FINAL.md are outstanding. Mitigations are in place but full fixes are targeted for GA.
 
-| ID | Issue | Pilot Mitigation |
-|---|---|---|
-| SEC-001 | Raw JSON identity bypass in SDK | `CAPSULE_EMULATOR` not set in staging/prod; gVisor sets `NODE_ENV=production` |
-| SEC-002 | Identity signing secret in sandbox env | Do not deploy apps with access to sensitive systems during pilot |
-| SEC-007 | Share revocation ~seconds delayed | Workaround: restart edge proxy after bulk revocations |
-| SEC-009 | Org auto-provisioning from OIDC claim | `enforce_sso=true` set for your domain prevents this |
-| SEC-012 | `NODE_ENV=development` auth bypass | gVisor driver explicitly sets `NODE_ENV=production` in all sandboxes |
+| ID      | Issue                                  | Pilot Mitigation                                                              |
+| ------- | -------------------------------------- | ----------------------------------------------------------------------------- |
+| SEC-001 | Raw JSON identity bypass in SDK        | `CAPSULE_EMULATOR` not set in staging/prod; gVisor sets `NODE_ENV=production` |
+| SEC-002 | Identity signing secret in sandbox env | Do not deploy apps with access to sensitive systems during pilot              |
+| SEC-007 | Share revocation ~seconds delayed      | Workaround: restart edge proxy after bulk revocations                         |
+| SEC-009 | Org auto-provisioning from OIDC claim  | `enforce_sso=true` set for your domain prevents this                          |
+| SEC-012 | `NODE_ENV=development` auth bypass     | gVisor driver explicitly sets `NODE_ENV=production` in all sandboxes          |
 
 ---
 
@@ -102,11 +102,11 @@ The Capsule Platform lets your team publish internal web applications as **capsu
 
 ### During Pilot
 
-| Channel | Use for | SLA |
-|---|---|---|
-| pilot-support@example.com | Questions, unexpected errors | Reply within 1 business day |
-| security@example.com | Security concerns, suspected data exposure | Reply within 4 hours |
-| GitHub Issues (private repo) | Bug reports, feature requests | Triaged within 2 business days |
+| Channel                      | Use for                                    | SLA                            |
+| ---------------------------- | ------------------------------------------ | ------------------------------ |
+| pilot-support@example.com    | Questions, unexpected errors               | Reply within 1 business day    |
+| security@example.com         | Security concerns, suspected data exposure | Reply within 4 hours           |
+| GitHub Issues (private repo) | Bug reports, feature requests              | Triaged within 2 business days |
 
 ### Escalation
 
@@ -186,15 +186,15 @@ capsule status --app <app-id>
 
 ### What data the platform stores
 
-| Data Category | Storage Location | Retention | Encryption |
-|---|---|---|---|
-| Application bundles (code) | S3 (versioned) | Until app deleted + 30 days | AES-256 at rest |
-| SQLite databases (app data) | Sandbox host EBS + S3 snapshots | Until app purged (per retention policy) | AES-256 at rest |
-| File blobs | S3 | Until deleted by app or purge | AES-256 at rest |
-| Audit logs | PostgreSQL (RDS) | 90 days default | AES-256 at rest |
-| Connector credentials (OAuth tokens, API keys) | PostgreSQL (encrypted field) | Until disconnected | AES-256-GCM |
-| LLM prompt/response content | NOT stored by default | N/A | N/A |
-| LLM usage metadata (token counts, cost) | PostgreSQL | 90 days | AES-256 at rest |
+| Data Category                                  | Storage Location                | Retention                               | Encryption      |
+| ---------------------------------------------- | ------------------------------- | --------------------------------------- | --------------- |
+| Application bundles (code)                     | S3 (versioned)                  | Until app deleted + 30 days             | AES-256 at rest |
+| SQLite databases (app data)                    | Sandbox host EBS + S3 snapshots | Until app purged (per retention policy) | AES-256 at rest |
+| File blobs                                     | S3                              | Until deleted by app or purge           | AES-256 at rest |
+| Audit logs                                     | PostgreSQL (RDS)                | 90 days default                         | AES-256 at rest |
+| Connector credentials (OAuth tokens, API keys) | PostgreSQL (encrypted field)    | Until disconnected                      | AES-256-GCM     |
+| LLM prompt/response content                    | NOT stored by default           | N/A                                     | N/A             |
+| LLM usage metadata (token counts, cost)        | PostgreSQL                      | 90 days                                 | AES-256 at rest |
 
 ### What the platform does NOT log
 

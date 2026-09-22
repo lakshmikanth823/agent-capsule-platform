@@ -45,14 +45,14 @@ capsule validate --json
 
 Expected exit codes:
 
-| Code | Meaning |
-|---:|---|
-| `0` | Valid |
-| `2` | Manifest/schema error |
-| `3` | Policy violation |
-| `4` | Approval required |
-| `5` | Authentication/authorization error |
-| `10` | Platform/network error |
+| Code | Meaning                            |
+| ---: | ---------------------------------- |
+|  `0` | Valid                              |
+|  `2` | Manifest/schema error              |
+|  `3` | Policy violation                   |
+|  `4` | Approval required                  |
+|  `5` | Authentication/authorization error |
+| `10` | Platform/network error             |
 
 ## 4. Local development
 
@@ -341,18 +341,18 @@ capsule
 
 ## 16. API-to-CLI mapping
 
-| CLI | API |
-|---|---|
-| `capsule app get` | `GET /apps/{appId}` |
-| `capsule validate` | `POST /apps/{appId}/validate` |
-| `capsule publish` | `POST /apps/{appId}/publish` |
-| `capsule status` | `GET /apps/{appId}/operations/{operationId}` |
-| `capsule versions` | `GET /apps/{appId}/versions` |
-| `capsule rollback` | `POST /apps/{appId}/rollback` |
-| `capsule share add` | `POST /apps/{appId}/shares` |
-| `capsule share list` | `GET /apps/{appId}/shares` |
-| `capsule share revoke` | `DELETE /apps/{appId}/shares/{shareId}` |
-| `capsule logs` | `GET /apps/{appId}/logs` |
+| CLI                    | API                                          |
+| ---------------------- | -------------------------------------------- |
+| `capsule app get`      | `GET /apps/{appId}`                          |
+| `capsule validate`     | `POST /apps/{appId}/validate`                |
+| `capsule publish`      | `POST /apps/{appId}/publish`                 |
+| `capsule status`       | `GET /apps/{appId}/operations/{operationId}` |
+| `capsule versions`     | `GET /apps/{appId}/versions`                 |
+| `capsule rollback`     | `POST /apps/{appId}/rollback`                |
+| `capsule share add`    | `POST /apps/{appId}/shares`                  |
+| `capsule share list`   | `GET /apps/{appId}/shares`                   |
+| `capsule share revoke` | `DELETE /apps/{appId}/shares/{shareId}`      |
+| `capsule logs`         | `GET /apps/{appId}/logs`                     |
 
 ## 17. API behavior rules
 

@@ -174,17 +174,17 @@ An agent cannot approve its own escalation.
 
 ## Suggested service ownership
 
-| Table | Primary service |
-|---|---|
-| `users` | Identity service |
-| `organizations` | Organization service |
-| `organization_members` | Access service |
-| `apps` | Capsule registry |
-| `app_versions` | Version/deployment service |
-| `app_shares` | Sharing/access service |
-| `app_share_policies` | Sharing/policy service |
-| `capability_approvals` | Policy/approval service |
-| `audit_events` | Audit/governance service |
+| Table                  | Primary service            |
+| ---------------------- | -------------------------- |
+| `users`                | Identity service           |
+| `organizations`        | Organization service       |
+| `organization_members` | Access service             |
+| `apps`                 | Capsule registry           |
+| `app_versions`         | Version/deployment service |
+| `app_shares`           | Sharing/access service     |
+| `app_share_policies`   | Sharing/policy service     |
+| `capability_approvals` | Policy/approval service    |
+| `audit_events`         | Audit/governance service   |
 
 ## Initial implementation choice
 

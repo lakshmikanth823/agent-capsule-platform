@@ -10,40 +10,41 @@
 
 ## Summary Table
 
-| ID | Surface | Severity | Fix Required Before Pilot |
-|---|---|---|---|
-| SEC-001 | Identity header — raw JSON bypass | **CRITICAL** | YES |
-| SEC-002 | Identity secret leaked into sandbox env | **CRITICAL** | YES |
-| SEC-003 | Connector viewer identity — signature bypass fallback | **CRITICAL** | YES |
-| SEC-004 | CORS wildcard with credentials on control plane | **CRITICAL** | YES |
-| SEC-005 | Platform role self-elevation via JWT claim | **HIGH** | YES |
-| SEC-006 | App key unverified — cross-capsule egress impersonation | **HIGH** | YES |
-| SEC-007 | Sharing revocation — stale in-memory cache window | **HIGH** | YES |
-| SEC-008 | Edge proxy uses hardcoded mock token to call control plane | **HIGH** | YES |
-| SEC-009 | OIDC org provisioned from claim — org takeover risk | **HIGH** | YES |
-| SEC-010 | Rollback race — no DB-level lock | **MEDIUM** | Recommended |
-| SEC-011 | Share by email creates users cross-org without verification | **MEDIUM** | YES |
-| SEC-012 | `NODE_ENV=development` bypasses all identity auth | **MEDIUM** | YES |
-| SEC-013 | CSP `unsafe-inline` in edge proxy applied to capsule responses | **MEDIUM** | Recommended |
-| SEC-014 | Audit log retains connector invocation payload hash — replay risk | **LOW** | No |
-| SEC-015 | gVisor ptrace platform — not KVM hardened in CI/test | **LOW** | Before GA |
+| ID      | Surface                                                           | Severity     | Fix Required Before Pilot |
+| ------- | ----------------------------------------------------------------- | ------------ | ------------------------- |
+| SEC-001 | Identity header — raw JSON bypass                                 | **CRITICAL** | YES                       |
+| SEC-002 | Identity secret leaked into sandbox env                           | **CRITICAL** | YES                       |
+| SEC-003 | Connector viewer identity — signature bypass fallback             | **CRITICAL** | YES                       |
+| SEC-004 | CORS wildcard with credentials on control plane                   | **CRITICAL** | YES                       |
+| SEC-005 | Platform role self-elevation via JWT claim                        | **HIGH**     | YES                       |
+| SEC-006 | App key unverified — cross-capsule egress impersonation           | **HIGH**     | YES                       |
+| SEC-007 | Sharing revocation — stale in-memory cache window                 | **HIGH**     | YES                       |
+| SEC-008 | Edge proxy uses hardcoded mock token to call control plane        | **HIGH**     | YES                       |
+| SEC-009 | OIDC org provisioned from claim — org takeover risk               | **HIGH**     | YES                       |
+| SEC-010 | Rollback race — no DB-level lock                                  | **MEDIUM**   | Recommended               |
+| SEC-011 | Share by email creates users cross-org without verification       | **MEDIUM**   | YES                       |
+| SEC-012 | `NODE_ENV=development` bypasses all identity auth                 | **MEDIUM**   | YES                       |
+| SEC-013 | CSP `unsafe-inline` in edge proxy applied to capsule responses    | **MEDIUM**   | Recommended               |
+| SEC-014 | Audit log retains connector invocation payload hash — replay risk | **LOW**      | No                        |
+| SEC-015 | gVisor ptrace platform — not KVM hardened in CI/test              | **LOW**      | Before GA                 |
 
 ---
 
 ## Detailed Findings
 
 ### SEC-001 — CRITICAL: Identity Header Raw JSON Bypass
+
 **File:** [`packages/sdk/src/identity.ts:132-141`](file:///e:/Cloud/capsule-platform/packages/sdk/src/identity.ts#L132-L141)
 
 ```typescript
 // Support raw JSON identity header for backward-compatibility with tests/mock callers
-if (token.trim().startsWith('{')) {
+if (token.trim().startsWith("{")) {
   try {
     const parsed = JSON.parse(token);
-    if (parsed && typeof parsed === 'object' && (parsed.sub || parsed.userId)) {
-      return createIdentityContext(parsed);  // ← NO SIGNATURE CHECK
+    if (parsed && typeof parsed === "object" && (parsed.sub || parsed.userId)) {
+      return createIdentityContext(parsed); // ← NO SIGNATURE CHECK
     }
-  } catch { }
+  } catch {}
 }
 ```
 
@@ -56,15 +57,20 @@ if (token.trim().startsWith('{')) {
 ---
 
 ### SEC-002 — CRITICAL: CAPSULE_IDENTITY_SECRET Leaked into Sandbox Environment
+
 **File:** [`packages/sandbox-driver/src/drivers/gvisor.ts:156-158`](file:///e:/Cloud/capsule-platform/packages/sandbox-driver/src/drivers/gvisor.ts#L156-L158)
 
 ```typescript
 if (process.env.CAPSULE_IDENTITY_SECRET) {
-  dockerArgs.push('-e', `CAPSULE_IDENTITY_SECRET=${process.env.CAPSULE_IDENTITY_SECRET}`);
+  dockerArgs.push(
+    "-e",
+    `CAPSULE_IDENTITY_SECRET=${process.env.CAPSULE_IDENTITY_SECRET}`,
+  );
 }
 ```
 
 **Impact:** The HMAC-SHA256 signing secret for identity tokens is injected as a plain environment variable into every sandbox container. Because HS256 is symmetric, any capsule app that reads `process.env.CAPSULE_IDENTITY_SECRET` can:
+
 1. Forge a valid `x-capsule-identity` JWT token for any user, any org, any role.
 2. Impersonate `platform_role: "owner"` and make control plane API calls with full administrative access.
 
@@ -75,6 +81,7 @@ This completely undermines the identity security model.
 ---
 
 ### SEC-003 — CRITICAL: Connector Viewer Identity — Signature Bypass Fallback
+
 **File:** [`services/control-plane/src/api/connectors.py:64-77`](file:///e:/Cloud/capsule-platform/services/control-plane/src/api/connectors.py#L64-L77)
 
 ```python
@@ -99,6 +106,7 @@ def parse_viewer_identity(header_value: Optional[str]) -> Optional[Dict[str, Any
 ---
 
 ### SEC-004 — CRITICAL: CORS Wildcard with Credentials on Control Plane
+
 **File:** [`services/control-plane/src/main.py:17-23`](file:///e:/Cloud/capsule-platform/services/control-plane/src/main.py#L17-L23)
 
 ```python
@@ -112,6 +120,7 @@ app.add_middleware(
 ```
 
 **Impact:** `allow_origins=["*"]` combined with `allow_credentials=True` is a browser-rejected combination per the CORS specification (browsers refuse preflight for `*` + credentials), but FastAPI/Starlette's implementation may still emit `Access-Control-Allow-Origin: *` on non-preflight requests. More critically, this configuration allows any web origin to make credentialed cross-origin requests to the control plane API from a victim's browser, enabling:
+
 - Cross-Site Request Forgery on all admin API endpoints.
 - Exfiltration of API responses to attacker-controlled origins.
 
@@ -122,6 +131,7 @@ The control plane should only accept requests from the dashboard domain and the 
 ---
 
 ### SEC-005 — HIGH: Platform Role Self-Elevation via JWT Claim
+
 **File:** [`services/control-plane/src/auth/dependencies.py:172`](file:///e:/Cloud/capsule-platform/services/control-plane/src/auth/dependencies.py#L172)
 
 ```python
@@ -135,6 +145,7 @@ platform_role = claims.get("platform_role", "user")
 ---
 
 ### SEC-006 — HIGH: App Key Unverified — Cross-Capsule Egress Impersonation
+
 **File:** [`services/egress-proxy/src/index.ts:147-169`](file:///e:/Cloud/capsule-platform/services/egress-proxy/src/index.ts#L147-L169)
 
 ```typescript
@@ -153,6 +164,7 @@ function extractAppKey(req: http.IncomingMessage): string {
 ---
 
 ### SEC-007 — HIGH: Sharing Revocation — Stale In-Memory Cache Window
+
 **File:** [`services/edge-proxy/src/index.ts:180-198`](file:///e:/Cloud/capsule-platform/services/edge-proxy/src/index.ts#L180-L198)
 
 ```typescript
@@ -174,11 +186,12 @@ for (const s of sharesData.shares || []) {
 ---
 
 ### SEC-008 — HIGH: Edge Proxy Uses Hardcoded Mock Token to Call Control Plane
+
 **File:** [`services/edge-proxy/src/index.ts:155-157`](file:///e:/Cloud/capsule-platform/services/edge-proxy/src/index.ts#L155-L157)
 
 ```typescript
 const res = await fetch(`${controlPlaneUrl}/v1/apps/${appKey}`, {
-  headers: { Authorization: 'Bearer mock-alice-token' },  // ← HARDCODED
+  headers: { Authorization: "Bearer mock-alice-token" }, // ← HARDCODED
 });
 ```
 
@@ -189,6 +202,7 @@ const res = await fetch(`${controlPlaneUrl}/v1/apps/${appKey}`, {
 ---
 
 ### SEC-009 — HIGH: OIDC Org Provisioned from Claim — Org Takeover Risk
+
 **File:** [`services/control-plane/src/auth/dependencies.py:155-161`](file:///e:/Cloud/capsule-platform/services/control-plane/src/auth/dependencies.py#L155-L161)
 
 ```python
@@ -205,6 +219,7 @@ if not org:
 ---
 
 ### SEC-010 — MEDIUM: Rollback Race — No DB-Level Lock
+
 **File:** [`services/control-plane/src/api/apps.py`](file:///e:/Cloud/capsule-platform/services/control-plane/src/api/apps.py) — rollback endpoint
 
 **Impact:** Two concurrent rollback requests for the same app can both read the current version, both take pre-rollback snapshots, and both attempt to update `app.current_version_id`. Without a `SELECT ... FOR UPDATE` row lock, the second rollback will silently overwrite the first, leaving the app in an inconsistent version state. The pre-rollback snapshot from the first attempt is then orphaned.
@@ -214,6 +229,7 @@ if not org:
 ---
 
 ### SEC-011 — MEDIUM: Share by Email Creates Users Across Org Without Verification
+
 **File:** [`services/control-plane/src/api/shares.py:186-196`](file:///e:/Cloud/capsule-platform/services/control-plane/src/api/shares.py#L186-L196)
 
 ```python
@@ -232,6 +248,7 @@ else:
 ---
 
 ### SEC-012 — MEDIUM: NODE_ENV=development Bypasses All Identity Verification
+
 **File:** [`packages/sdk/src/identity.ts:114-121`](file:///e:/Cloud/capsule-platform/packages/sdk/src/identity.ts#L114-L121)
 
 ```typescript
@@ -252,11 +269,14 @@ if (!token) {
 ---
 
 ### SEC-013 — MEDIUM: CSP `unsafe-inline` Applied to Capsule App Responses
+
 **File:** [`services/edge-proxy/src/index.ts:58-60`](file:///e:/Cloud/capsule-platform/services/edge-proxy/src/index.ts#L58-L60)
 
 ```typescript
-res.setHeader('Content-Security-Policy',
-  "default-src 'self'; script-src 'self' 'unsafe-inline'; ...");
+res.setHeader(
+  "Content-Security-Policy",
+  "default-src 'self'; script-src 'self' 'unsafe-inline'; ...",
+);
 ```
 
 **Impact:** `unsafe-inline` in `script-src` allows inline JavaScript in every capsule app response. This weakens XSS protection significantly — if any capsule app renders user-controlled data without escaping, an attacker can execute arbitrary JavaScript. The per-origin isolation (each capsule on its own subdomain) contains the blast radius to one org's data, but the risk is still material for a multi-tenant platform.
@@ -266,6 +286,7 @@ res.setHeader('Content-Security-Policy',
 ---
 
 ### SEC-014 — LOW: Audit Log Retains Connector Payload Hash
+
 **File:** [`services/control-plane/src/api/connectors.py:392-420`](file:///e:/Cloud/capsule-platform/services/control-plane/src/api/connectors.py#L392-L420)
 
 **Impact:** The audit event metadata includes `masked_payload` (output of `mask_sensitive_data()`). While the masking function attempts to redact secrets, heuristic masking is explicitly documented as best-effort. If a connector payload contains a secret in an unusual format, it may appear in the audit log.
@@ -275,10 +296,11 @@ res.setHeader('Content-Security-Policy',
 ---
 
 ### SEC-015 — LOW: gVisor ptrace Platform in Tests — Not KVM
+
 **File:** [`packages/sandbox-driver/src/drivers/gvisor.ts:45`](file:///e:/Cloud/capsule-platform/packages/sandbox-driver/src/drivers/gvisor.ts#L45)
 
 ```typescript
-this.platform = options.platform || process.env.GVISOR_PLATFORM || 'ptrace';
+this.platform = options.platform || process.env.GVISOR_PLATFORM || "ptrace";
 ```
 
 **Impact:** The default gVisor platform is `ptrace`, which uses software emulation of kernel system calls. This is slower (p95 cold start: 1400ms vs 295ms for KVM) and provides weaker isolation than the `kvm` hardware virtualization backend. Tests run with `ptrace` even on KVM-capable hardware unless `GVISOR_PLATFORM=kvm` is explicitly set. The CI red-team suite passes with `ptrace` — some kernel-level exploit attempts that `ptrace` blocks may behave differently under `kvm`.
@@ -293,22 +315,22 @@ this.platform = options.platform || process.env.GVISOR_PLATFORM || 'ptrace';
 
 **Coverage assessment:**
 
-| Attack Surface | Test Coverage | Gap |
-|---|---|---|
-| Cloud metadata (169.254.169.254) | ✅ Covered | None |
-| Private IP ranges (RFC 1918) | ✅ Covered | None |
-| DNS rebinding | ✅ Covered | None |
-| Cross-capsule file read | ✅ Covered | None |
-| Secret env var exposure | ✅ Covered | None |
-| Cookie theft across origins | ✅ Covered | None |
-| Resource limits (fork bomb) | ✅ Covered | None |
-| Rootfs write (read-only mount) | ✅ Covered | None |
-| Identity forgery (signed) | ✅ Covered | None |
-| **Raw JSON identity bypass** | ❌ **NOT TESTED** | SEC-001 |
+| Attack Surface                     | Test Coverage     | Gap     |
+| ---------------------------------- | ----------------- | ------- |
+| Cloud metadata (169.254.169.254)   | ✅ Covered        | None    |
+| Private IP ranges (RFC 1918)       | ✅ Covered        | None    |
+| DNS rebinding                      | ✅ Covered        | None    |
+| Cross-capsule file read            | ✅ Covered        | None    |
+| Secret env var exposure            | ✅ Covered        | None    |
+| Cookie theft across origins        | ✅ Covered        | None    |
+| Resource limits (fork bomb)        | ✅ Covered        | None    |
+| Rootfs write (read-only mount)     | ✅ Covered        | None    |
+| Identity forgery (signed)          | ✅ Covered        | None    |
+| **Raw JSON identity bypass**       | ❌ **NOT TESTED** | SEC-001 |
 | **Cross-app egress impersonation** | ❌ **NOT TESTED** | SEC-006 |
-| **Connector signature bypass** | ❌ **NOT TESTED** | SEC-003 |
-| Capability escalation | ✅ Covered | None |
-| Undeclared capability use | ✅ Covered | None |
+| **Connector signature bypass**     | ❌ **NOT TESTED** | SEC-003 |
+| Capability escalation              | ✅ Covered        | None    |
+| Undeclared capability use          | ✅ Covered        | None    |
 
 **Three critical attack vectors are not covered by existing red-team tests.** Tests should be added for SEC-001, SEC-003, and SEC-006 before pilot.
 
@@ -318,14 +340,14 @@ this.platform = options.platform || process.env.GVISOR_PLATFORM || 'ptrace';
 
 The following code paths are known to be development-only and MUST NOT be active in production:
 
-| Component | Dev-only Code Path | Production Guard |
-|---|---|---|
-| `DockerDevDriver` | Shared-kernel sandbox (no gVisor) | Production startup guard ✅ |
-| Mock OIDC provider | `AUTH_PROVIDER=mock` | Must set `AUTH_PROVIDER=google` or OIDC ✅ |
-| Emulator identity | `CAPSULE_EMULATOR=true` | Must not be set in production ✅ |
-| `NODE_ENV=development` emulator | See SEC-012 | ⚠️ Fix required |
-| Edge proxy mock token | `'Bearer mock-alice-token'` | ❌ Fix required (SEC-008) |
-| Raw JSON identity | SDK line 132 | ❌ Fix required (SEC-001) |
+| Component                       | Dev-only Code Path                | Production Guard                           |
+| ------------------------------- | --------------------------------- | ------------------------------------------ |
+| `DockerDevDriver`               | Shared-kernel sandbox (no gVisor) | Production startup guard ✅                |
+| Mock OIDC provider              | `AUTH_PROVIDER=mock`              | Must set `AUTH_PROVIDER=google` or OIDC ✅ |
+| Emulator identity               | `CAPSULE_EMULATOR=true`           | Must not be set in production ✅           |
+| `NODE_ENV=development` emulator | See SEC-012                       | ⚠️ Fix required                            |
+| Edge proxy mock token           | `'Bearer mock-alice-token'`       | ❌ Fix required (SEC-008)                  |
+| Raw JSON identity               | SDK line 132                      | ❌ Fix required (SEC-001)                  |
 
 ---
 
@@ -333,7 +355,7 @@ The following code paths are known to be development-only and MUST NOT be active
 
 The following paths exist from capsule application code to the control plane:
 
-1. **Egress proxy** → connector broker (`POST /connectors/{name}/invoke`): Authenticated by `x-capsule-key`. Vulnerable to SEC-006 (key impersonation). Connector invocations are the *intended* path; the risk is the identity attached.
+1. **Egress proxy** → connector broker (`POST /connectors/{name}/invoke`): Authenticated by `x-capsule-key`. Vulnerable to SEC-006 (key impersonation). Connector invocations are the _intended_ path; the risk is the identity attached.
 
 2. **Egress proxy** → arbitrary HTTP: Blocked by default-deny allowlist. SSRF protection in place. **Currently no path unless declared in manifest.**
 
@@ -348,6 +370,7 @@ The following paths exist from capsule application code to the control plane:
 ## Priority Order for Fixes
 
 Before any real-user pilot:
+
 1. **SEC-002** — Remove `CAPSULE_IDENTITY_SECRET` from sandbox env; switch to asymmetric signing
 2. **SEC-001** — Remove raw JSON identity bypass
 3. **SEC-003** — Remove `verify_signature: False` connector identity fallback

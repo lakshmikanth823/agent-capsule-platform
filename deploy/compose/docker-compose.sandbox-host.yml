@@ -9,7 +9,6 @@
 name: capsule-sandbox-host
 
 services:
-
   # ── Build service — compiles capsule bundles in isolated containers ────────
   builder:
     image: "${ECR_REGISTRY}/capsule/builder:${IMAGE_TAG}"
@@ -29,7 +28,7 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
     ports:
-      - "127.0.0.1:8090:8090"   # Bound to loopback only — internal use
+      - "127.0.0.1:8090:8090" # Bound to loopback only — internal use
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8090/healthz"]
       interval: 15s

@@ -1,6 +1,6 @@
-import fs from 'node:fs';
-import path from 'node:path';
-import { createRequire } from 'node:module';
+import fs from "node:fs";
+import path from "node:path";
+import { createRequire } from "node:module";
 
 export interface DatabaseOptions {
   path?: string;
@@ -27,7 +27,7 @@ let DatabaseSyncClass: any;
 function getDatabaseSyncClass(): any {
   if (!DatabaseSyncClass) {
     const require = createRequire(import.meta.url);
-    const sqlite = require('node:sqlite');
+    const sqlite = require("node:sqlite");
     DatabaseSyncClass = sqlite.DatabaseSync;
   }
   return DatabaseSyncClass;
@@ -42,16 +42,21 @@ export class SQLiteDatabase implements DatabaseClient {
     // 1. Determine storage path
     let targetPath = options.path || process.env.DATABASE_PATH;
     if (!targetPath) {
-      if (process.env.CAPSULE_EMULATOR === 'true' || process.env.NODE_ENV !== 'production') {
-        targetPath = path.resolve(process.cwd(), '.capsule', 'local.db');
+      if (
+        process.env.CAPSULE_EMULATOR === "true" ||
+        process.env.NODE_ENV !== "production"
+      ) {
+        targetPath = path.resolve(process.cwd(), ".capsule", "local.db");
       } else {
-        targetPath = '/data/app.sqlite';
+        targetPath = "/data/app.sqlite";
       }
     }
     this.dbPath = targetPath;
 
     // 2. Determine size limit
-    const envMaxSize = process.env.DB_MAX_SIZE_MB ? Number(process.env.DB_MAX_SIZE_MB) : undefined;
+    const envMaxSize = process.env.DB_MAX_SIZE_MB
+      ? Number(process.env.DB_MAX_SIZE_MB)
+      : undefined;
     this.maxSizeMb = options.maxSizeMb || envMaxSize || 50;
 
     // 3. Ensure directory exists
@@ -65,8 +70,8 @@ export class SQLiteDatabase implements DatabaseClient {
     this.db = new DBClass(this.dbPath);
 
     // 5. Configure SQLite for high concurrency, single-writer safety, and size limits
-    this.db.exec('PRAGMA journal_mode = WAL;');
-    this.db.exec('PRAGMA synchronous = NORMAL;');
+    this.db.exec("PRAGMA journal_mode = WAL;");
+    this.db.exec("PRAGMA synchronous = NORMAL;");
 
     // 6. Enforce size limit via max_page_count
     // Default page_size in SQLite is 4096 bytes (4KB)
@@ -114,14 +119,14 @@ export class SQLiteDatabase implements DatabaseClient {
    * Execute a transaction with immediate write locking (single-writer guarantee).
    */
   transaction<T>(fn: () => T): T {
-    this.db.exec('BEGIN IMMEDIATE;');
+    this.db.exec("BEGIN IMMEDIATE;");
     try {
       const result = fn();
-      this.db.exec('COMMIT;');
+      this.db.exec("COMMIT;");
       return result;
     } catch (err) {
       try {
-        this.db.exec('ROLLBACK;');
+        this.db.exec("ROLLBACK;");
       } catch {
         // ignore rollback failure if transaction already aborted
       }

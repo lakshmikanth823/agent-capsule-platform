@@ -5,13 +5,7 @@
   "description": "Manifest contract for an agent-published Software Capsule. Platform policy may impose stricter limits than this schema.",
   "type": "object",
   "additionalProperties": false,
-  "required": [
-    "apiVersion",
-    "id",
-    "name",
-    "shape",
-    "runtime"
-  ],
+  "required": ["apiVersion", "id", "name", "shape", "runtime"],
   "properties": {
     "apiVersion": {
       "type": "string",
@@ -79,9 +73,7 @@
         "db": {
           "type": "object",
           "additionalProperties": false,
-          "required": [
-            "type"
-          ],
+          "required": ["type"],
           "properties": {
             "type": {
               "type": "string",
@@ -95,9 +87,7 @@
         "files": {
           "type": "object",
           "additionalProperties": false,
-          "required": [
-            "max_mb"
-          ],
+          "required": ["max_mb"],
           "properties": {
             "max_mb": {
               "type": "integer",
@@ -109,9 +99,7 @@
         "ai": {
           "type": "object",
           "additionalProperties": false,
-          "required": [
-            "monthly_budget_usd"
-          ],
+          "required": ["monthly_budget_usd"],
           "properties": {
             "monthly_budget_usd": {
               "type": "number",
@@ -141,10 +129,7 @@
     "connector": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "name",
-        "acts_as"
-      ],
+      "required": ["name", "acts_as"],
       "properties": {
         "name": {
           "type": "string",
@@ -156,10 +141,7 @@
         },
         "acts_as": {
           "type": "string",
-          "enum": [
-            "viewer",
-            "service"
-          ]
+          "enum": ["viewer", "service"]
         },
         "spreadsheet_ids": {
           "type": "array",
@@ -173,10 +155,7 @@
     "schedule": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "cron",
-        "handler"
-      ],
+      "required": ["cron", "handler"],
       "properties": {
         "cron": {
           "type": "string",
@@ -195,14 +174,10 @@
       "properties": {
         "default": {
           "type": "string",
-          "enum": [
-            "org"
-          ]
+          "enum": ["org"]
         }
       },
-      "required": [
-        "default"
-      ]
+      "required": ["default"]
     },
     "limits": {
       "type": "object",
@@ -210,9 +185,7 @@
       "properties": {
         "cpu": {
           "type": "string",
-          "enum": [
-            "small"
-          ]
+          "enum": ["small"]
         },
         "memory_mb": {
           "type": "integer",

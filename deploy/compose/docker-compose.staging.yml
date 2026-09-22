@@ -17,7 +17,6 @@
 name: capsule-staging
 
 services:
-
   # Override control-plane to use local postgres + minio
   control-plane:
     image: "${ECR_REGISTRY:-local}/capsule/control-plane:${IMAGE_TAG:-latest}"

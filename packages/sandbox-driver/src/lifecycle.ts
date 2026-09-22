@@ -8,8 +8,8 @@
  * - resume on request
  * - recover after crash
  */
-import path from 'node:path';
-import fs from 'node:fs/promises';
+import path from "node:path";
+import fs from "node:fs/promises";
 import type {
   SandboxDriver,
   SandboxSpec,
@@ -18,13 +18,13 @@ import type {
   ForwardRequest,
   ForwardResponse,
   SandboxLimits,
-} from './interface.js';
-import { DockerDevDriver } from './drivers/docker.js';
-import { GVisorDriver, type GVisorDriverOptions } from './drivers/gvisor.js';
-import { MockSandboxDriver } from './drivers/mock.js';
+} from "./interface.js";
+import { DockerDevDriver } from "./drivers/docker.js";
+import { GVisorDriver, type GVisorDriverOptions } from "./drivers/gvisor.js";
+import { MockSandboxDriver } from "./drivers/mock.js";
 
 export interface DriverFactoryOptions {
-  driverType?: 'gvisor' | 'docker' | 'mock';
+  driverType?: "gvisor" | "docker" | "mock";
   gvisorOptions?: GVisorDriverOptions;
 }
 
@@ -32,17 +32,19 @@ export interface DriverFactoryOptions {
  * Factory creating the appropriate SandboxDriver based on environment and configuration.
  * Automatically selects GVisorDriver in production mode.
  */
-export function createDefaultSandboxDriver(options: DriverFactoryOptions = {}): SandboxDriver {
+export function createDefaultSandboxDriver(
+  options: DriverFactoryOptions = {},
+): SandboxDriver {
   const driverType =
     options.driverType ||
     process.env.SANDBOX_DRIVER ||
-    (process.env.NODE_ENV === 'production' ? 'gvisor' : 'docker');
+    (process.env.NODE_ENV === "production" ? "gvisor" : "docker");
 
-  if (driverType === 'gvisor') {
+  if (driverType === "gvisor") {
     return new GVisorDriver(options.gvisorOptions);
   }
 
-  if (driverType === 'mock') {
+  if (driverType === "mock") {
     return new MockSandboxDriver();
   }
 
@@ -66,9 +68,10 @@ export class CapsuleLifecycleManager {
 
   constructor(config: LifecycleConfig) {
     this.driver = config.driver;
-    this.baseDataDir = config.baseDataDir || path.resolve(process.cwd(), 'data', 'capsules');
+    this.baseDataDir =
+      config.baseDataDir || path.resolve(process.cwd(), "data", "capsules");
     this.defaultLimits = config.defaultLimits || {
-      cpu: '0.5',
+      cpu: "0.5",
       memoryMb: 256,
       pidsLimit: 64,
       timeoutSeconds: 30,
@@ -95,24 +98,37 @@ export class CapsuleLifecycleManager {
     limits?: Partial<SandboxLimits>;
     env?: Record<string, string>;
   }): Promise<SandboxSpec> {
-    const dataDir = params.customDataDir || path.join(this.baseDataDir, params.capsuleId, 'data');
+    const dataDir =
+      params.customDataDir ||
+      path.join(this.baseDataDir, params.capsuleId, "data");
     await fs.mkdir(dataDir, { recursive: true });
-    await fs.mkdir(path.join(dataDir, 'blobs'), { recursive: true });
+    await fs.mkdir(path.join(dataDir, "blobs"), { recursive: true });
 
     // Ensure @capsule/sdk is available and up-to-date in bundle's node_modules
-    const sdkTargetDir = path.join(params.bundlePath, 'node_modules', '@capsule', 'sdk');
+    const sdkTargetDir = path.join(
+      params.bundlePath,
+      "node_modules",
+      "@capsule",
+      "sdk",
+    );
     const possibleSdkDirs = [
-      path.resolve(process.cwd(), 'packages', 'sdk'),
-      path.resolve(process.cwd(), 'node_modules', '@capsule', 'sdk'),
+      path.resolve(process.cwd(), "packages", "sdk"),
+      path.resolve(process.cwd(), "node_modules", "@capsule", "sdk"),
     ];
     for (const sdkSourceDir of possibleSdkDirs) {
       try {
-        const sourceDist = path.join(sdkSourceDir, 'dist');
+        const sourceDist = path.join(sdkSourceDir, "dist");
         const distFiles = await fs.readdir(sourceDist);
-        await fs.mkdir(path.join(sdkTargetDir, 'dist'), { recursive: true });
-        await fs.copyFile(path.join(sdkSourceDir, 'package.json'), path.join(sdkTargetDir, 'package.json'));
+        await fs.mkdir(path.join(sdkTargetDir, "dist"), { recursive: true });
+        await fs.copyFile(
+          path.join(sdkSourceDir, "package.json"),
+          path.join(sdkTargetDir, "package.json"),
+        );
         for (const file of distFiles) {
-          await fs.copyFile(path.join(sourceDist, file), path.join(sdkTargetDir, 'dist', file));
+          await fs.copyFile(
+            path.join(sourceDist, file),
+            path.join(sdkTargetDir, "dist", file),
+          );
         }
         break;
       } catch {
@@ -124,7 +140,10 @@ export class CapsuleLifecycleManager {
     const manifestLimits = params.manifest?.limits;
     const limits: Partial<SandboxLimits> = {
       cpu: params.limits?.cpu || manifestLimits?.cpu || this.defaultLimits.cpu,
-      memoryMb: params.limits?.memoryMb || manifestLimits?.memory_mb || this.defaultLimits.memoryMb,
+      memoryMb:
+        params.limits?.memoryMb ||
+        manifestLimits?.memory_mb ||
+        this.defaultLimits.memoryMb,
       pidsLimit: params.limits?.pidsLimit || this.defaultLimits.pidsLimit,
       timeoutSeconds:
         params.limits?.timeoutSeconds ||
@@ -135,12 +154,14 @@ export class CapsuleLifecycleManager {
     // Capability enforcement at sandbox layer:
     // 1. Database capability: only assign dataDir if declared in capabilities
     const hasDb = Boolean(params.manifest?.capabilities?.db);
-    const effectiveDataDir = hasDb ? path.resolve(dataDir) : '';
+    const effectiveDataDir = hasDb ? path.resolve(dataDir) : "";
 
     // 2. Egress capability: default deny network isolation unless declared
     const hasEgress =
-      Array.isArray(params.manifest?.egress) && params.manifest.egress.length > 0;
-    const egressProxyUrl = process.env.EGRESS_PROXY_URL || 'http://127.0.0.1:19080';
+      Array.isArray(params.manifest?.egress) &&
+      params.manifest.egress.length > 0;
+    const egressProxyUrl =
+      process.env.EGRESS_PROXY_URL || "http://127.0.0.1:19080";
 
     const env: Record<string, string> = { ...(params.env || {}) };
     if (hasEgress) {
@@ -161,13 +182,12 @@ export class CapsuleLifecycleManager {
       manifest: params.manifest,
       limits,
       env,
-      networkMode: hasEgress ? 'bridge' : 'none', // Default deny: no outbound network
+      networkMode: hasEgress ? "bridge" : "none", // Default deny: no outbound network
       port: 3000,
     };
 
     return spec;
   }
-
 
   /**
    * Start a capsule on demand.
@@ -180,16 +200,16 @@ export class CapsuleLifecycleManager {
 
     if (instance) {
       const currentStatus = await this.driver.status(instance.id);
-      if (currentStatus === 'running') {
+      if (currentStatus === "running") {
         return instance;
       }
-      if (currentStatus === 'suspended') {
+      if (currentStatus === "suspended") {
         await this.driver.resume(instance.id);
-        instance.status = 'running';
+        instance.status = "running";
         instance.lastActiveAt = new Date();
         return instance;
       }
-      if (currentStatus === 'crashed' || currentStatus === 'failed') {
+      if (currentStatus === "crashed" || currentStatus === "failed") {
         instance = await this.driver.recover(instance.id);
         this.instances.set(spec.appKey, instance);
         return instance;
@@ -207,7 +227,10 @@ export class CapsuleLifecycleManager {
    * Forward an incoming HTTP request into the capsule.
    * Automatically starts or resumes the sandbox if it is idle/suspended/stopped (Wake-on-Request).
    */
-  async handleRequest(spec: SandboxSpec, req: ForwardRequest): Promise<ForwardResponse> {
+  async handleRequest(
+    spec: SandboxSpec,
+    req: ForwardRequest,
+  ): Promise<ForwardResponse> {
     const instance = await this.startOnDemand(spec);
     try {
       const response = await this.driver.forwardRequest(instance.id, req);
@@ -216,7 +239,7 @@ export class CapsuleLifecycleManager {
     } catch (err: any) {
       // Check if container crashed during execution
       const st = await this.driver.status(instance.id);
-      if (st === 'crashed' || st === 'failed') {
+      if (st === "crashed" || st === "failed") {
         await this.driver.recover(instance.id).catch(() => {});
       }
       throw err;
@@ -232,11 +255,11 @@ export class CapsuleLifecycleManager {
     const suspendedIds: string[] = [];
 
     for (const [_, instance] of this.instances.entries()) {
-      if (instance.status === 'running') {
+      if (instance.status === "running") {
         const idleTime = now - instance.lastActiveAt.getTime();
         if (idleTime >= threshold) {
           await this.driver.suspend(instance.id);
-          instance.status = 'suspended';
+          instance.status = "suspended";
           suspendedIds.push(instance.id);
         }
       }
@@ -252,7 +275,7 @@ export class CapsuleLifecycleManager {
     const instance = this.instances.get(appKey);
     if (!instance) throw new Error(`No instance tracked for appKey: ${appKey}`);
     await this.driver.suspend(instance.id);
-    instance.status = 'suspended';
+    instance.status = "suspended";
   }
 
   /**
@@ -262,7 +285,7 @@ export class CapsuleLifecycleManager {
     const instance = this.instances.get(appKey);
     if (!instance) throw new Error(`No instance tracked for appKey: ${appKey}`);
     await this.driver.resume(instance.id);
-    instance.status = 'running';
+    instance.status = "running";
     instance.lastActiveAt = new Date();
   }
 
@@ -272,9 +295,9 @@ export class CapsuleLifecycleManager {
   async suspendOrg(orgId: string): Promise<string[]> {
     const suspendedIds: string[] = [];
     for (const [_, instance] of this.instances.entries()) {
-      if (instance.spec.orgId === orgId && instance.status === 'running') {
+      if (instance.spec.orgId === orgId && instance.status === "running") {
         await this.driver.suspend(instance.id);
-        instance.status = 'suspended';
+        instance.status = "suspended";
         suspendedIds.push(instance.id);
       }
     }
@@ -287,16 +310,15 @@ export class CapsuleLifecycleManager {
   async resumeOrg(orgId: string): Promise<string[]> {
     const resumedIds: string[] = [];
     for (const [_, instance] of this.instances.entries()) {
-      if (instance.spec.orgId === orgId && instance.status === 'suspended') {
+      if (instance.spec.orgId === orgId && instance.status === "suspended") {
         await this.driver.resume(instance.id);
-        instance.status = 'running';
+        instance.status = "running";
         instance.lastActiveAt = new Date();
         resumedIds.push(instance.id);
       }
     }
     return resumedIds;
   }
-
 
   /**
    * Recover a capsule if it has crashed.
@@ -316,7 +338,7 @@ export class CapsuleLifecycleManager {
     const instance = this.instances.get(appKey);
     if (instance) {
       await this.driver.stop(instance.id);
-      instance.status = 'stopped';
+      instance.status = "stopped";
     }
   }
 
@@ -336,7 +358,7 @@ export class CapsuleLifecycleManager {
    */
   async getStatus(appKey: string): Promise<SandboxStatus> {
     const instance = this.instances.get(appKey);
-    if (!instance) return 'stopped';
+    if (!instance) return "stopped";
     return this.driver.status(instance.id);
   }
 
@@ -351,9 +373,12 @@ export class CapsuleLifecycleManager {
   /**
    * Export the SQLite database for a capsule to a target path.
    */
-  async exportDatabase(capsuleId: string, destinationPath: string): Promise<void> {
-    const dataDir = path.join(this.baseDataDir, capsuleId, 'data');
-    const dbFile = path.join(dataDir, 'app.sqlite');
+  async exportDatabase(
+    capsuleId: string,
+    destinationPath: string,
+  ): Promise<void> {
+    const dataDir = path.join(this.baseDataDir, capsuleId, "data");
+    const dbFile = path.join(dataDir, "app.sqlite");
     try {
       await fs.access(dbFile);
     } catch {

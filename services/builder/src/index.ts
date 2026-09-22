@@ -15,6 +15,8 @@ export interface BuildResult {
   error?: string;
 }
 
-export async function validateBuildOptions(options: BuildOptions): Promise<boolean> {
+export async function validateBuildOptions(
+  options: BuildOptions,
+): Promise<boolean> {
   return Boolean(options.sourceDir && options.outputArtifactPath);
 }

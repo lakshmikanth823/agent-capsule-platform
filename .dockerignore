@@ -35,8 +35,10 @@ docs/
 # CI/CD
 .github/
 
-# Deploy directory (not needed inside containers)
-deploy/
+# Deploy directory (compose/monitoring not needed inside containers)
+deploy/compose/
+deploy/monitoring/
+deploy/systemd/
 
 # Data directories
 data/

@@ -15,7 +15,7 @@ export interface EgressEvent {
   host: string;
   port: number;
   destinationIp?: string;
-  decision: 'allowed' | 'denied';
+  decision: "allowed" | "denied";
   reason: string;
   bytesReceived?: number;
   bytesSent?: number;
@@ -25,7 +25,7 @@ export class EgressLogger {
   private events: EgressEvent[] = [];
   private listeners: ((event: EgressEvent) => void)[] = [];
 
-  logEvent(event: Omit<EgressEvent, 'id' | 'timestamp'>): EgressEvent {
+  logEvent(event: Omit<EgressEvent, "id" | "timestamp">): EgressEvent {
     const fullEvent: EgressEvent = {
       id: `egr-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
       timestamp: new Date().toISOString(),
@@ -40,10 +40,11 @@ export class EgressLogger {
     }
 
     // Format console output
-    const statusColor = fullEvent.decision === 'allowed' ? '\x1b[32m' : '\x1b[31m';
-    const resetColor = '\x1b[0m';
+    const statusColor =
+      fullEvent.decision === "allowed" ? "\x1b[32m" : "\x1b[31m";
+    const resetColor = "\x1b[0m";
     console.log(
-      `[EGRESS] ${fullEvent.timestamp} [${fullEvent.appKey}] ${fullEvent.method} ${fullEvent.host}:${fullEvent.port} -> ${statusColor}${fullEvent.decision.toUpperCase()}${resetColor} (${fullEvent.reason})`
+      `[EGRESS] ${fullEvent.timestamp} [${fullEvent.appKey}] ${fullEvent.method} ${fullEvent.host}:${fullEvent.port} -> ${statusColor}${fullEvent.decision.toUpperCase()}${resetColor} (${fullEvent.reason})`,
     );
 
     for (const listener of this.listeners) {
@@ -61,7 +62,10 @@ export class EgressLogger {
     this.listeners.push(listener);
   }
 
-  getEvents(filter?: { appKey?: string; decision?: 'allowed' | 'denied' }): EgressEvent[] {
+  getEvents(filter?: {
+    appKey?: string;
+    decision?: "allowed" | "denied";
+  }): EgressEvent[] {
     return this.events.filter((e) => {
       if (filter?.appKey && e.appKey !== filter.appKey) return false;
       if (filter?.decision && e.decision !== filter.decision) return false;

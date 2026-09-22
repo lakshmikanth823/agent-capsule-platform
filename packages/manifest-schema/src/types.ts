@@ -6,13 +6,13 @@
 export interface ConnectorDeclaration {
   name: string;
   channel?: string;
-  acts_as: 'viewer' | 'service';
+  acts_as: "viewer" | "service";
   spreadsheet_ids?: string[];
 }
 
 export interface ManifestCapabilities {
   db?: {
-    type: 'sqlite';
+    type: "sqlite";
   };
   identity?: boolean;
   files?: {
@@ -32,11 +32,11 @@ export interface ManifestSchedule {
 }
 
 export interface ManifestSharing {
-  default: 'org';
+  default: "org";
 }
 
 export interface ManifestLimits {
-  cpu?: 'small';
+  cpu?: "small";
   memory_mb?: number;
   request_timeout_s?: number;
   db_max_mb?: number;
@@ -45,11 +45,11 @@ export interface ManifestLimits {
 }
 
 export interface CapsuleManifest {
-  apiVersion: 'capsule/v1alpha1';
+  apiVersion: "capsule/v1alpha1";
   id: string;
   name: string;
-  shape: 'web-app';
-  runtime: 'node22';
+  shape: "web-app";
+  runtime: "node22";
   roles?: string[];
   capabilities?: ManifestCapabilities;
   egress?: string[];
@@ -60,7 +60,7 @@ export interface CapsuleManifest {
 
 export interface ValidationCheck {
   name: string;
-  status: 'pass' | 'fail' | 'warn';
+  status: "pass" | "fail" | "warn";
   code: string;
   message: string;
   path?: string | null;

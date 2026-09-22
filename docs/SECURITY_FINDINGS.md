@@ -14,6 +14,7 @@ An automated red-team security assessment was conducted against the Software Cap
 A deliberately malicious test application (`examples/malicious-app`) and an automated test suite (`tests/redteam/redteam.test.ts`) were executed to simulate adversarial attacks across all 9 required attack vectors.
 
 ### Phase 1 Acceptance Criterion
+
 > **Status**: **PASSED**  
 > All 9 active attack vectors are successfully blocked by platform security controls. Zero attacks bypassed enforcement in the automated suite.
 
@@ -21,26 +22,27 @@ A deliberately malicious test application (`examples/malicious-app`) and an auto
 
 ## Attack Surface Assessment Matrix
 
-| # | Attack Surface | Target / Objective | Defense Mechanism | Test Status |
-|---|---|---|---|---|
-| **1** | **Network Egress** | Reach internet, internal IPs (RFC 1918), and Cloud Metadata (`169.254.169.254`) | Egress proxy default-deny, connection-time SSRF/DNS rebinding defense, container `--network none` | **BLOCKED** |
-| **2** | **Cross-Capsule Data** | Read another capsule's SQLite database or blob files via path traversal (`../`) | Per-capsule isolated host volumes, `@capsule/sdk` path traversal defense (`FileStorageError`) | **BLOCKED** |
-| **3** | **Secret Discovery** | Read platform master secrets or connector tokens from environment or files | Zero-secret injection into container env, AES-256-GCM encryption at rest, masked logging | **BLOCKED** |
-| **4** | **Session / Cookie Theft** | Steal cookies across origins or from the dashboard | `HttpOnly`, `SameSite=Lax`, domain separation (`*.apps.localhost` vs `dashboard.localhost`) | **BLOCKED** |
-| **5** | **Resource Quotas** | Exceed CPU, memory, disk quota, or request timeout | Container cgroup limits (`--memory 256m`, `--cpus 0.5`), SQLite `PRAGMA max_page_count` (`SQLITE_FULL`), edge proxy timeouts | **BLOCKED** |
-| **6** | **Sandbox Escape** | Write outside allowed paths, use raw sockets, fork bomb, or exploit host kernel | `GVisorDriver` user-space kernel (Sentry Go syscall implementation, no shared kernel with host), read-only rootfs (`--read-only`, `/app:ro`), non-root (`1000:1000`), `--cap-drop=ALL`, `no-new-privileges`, `--pids-limit 64`, `--network none`, Production Startup Guard | **BLOCKED** |
-| **7** | **Identity Header Forgery** | Forge HMAC signature, use `alg: none`, replay expired tokens, or cross-app audience mismatch | HMAC-SHA256 signature verification, `alg` whitelist, timestamp expiry check, `aud` matching in `@capsule/sdk` | **BLOCKED** |
-| **8** | **Undeclared Capabilities** | Invoke undeclared connectors or unauthorized AI capabilities | Control-plane capability verification before broker invocation (`403 CAPABILITY_DENIED`) | **BLOCKED** |
-| **9** | **Unauthorized Escalation** | Add capabilities in update without owner approval | Capability escalation engine (`detect_capability_escalation`), scoped publish token self-approval block (`403 FORBIDDEN`) | **BLOCKED** |
+| #     | Attack Surface              | Target / Objective                                                                           | Defense Mechanism                                                                                                                                                                                                                                                          | Test Status |
+| ----- | --------------------------- | -------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------- |
+| **1** | **Network Egress**          | Reach internet, internal IPs (RFC 1918), and Cloud Metadata (`169.254.169.254`)              | Egress proxy default-deny, connection-time SSRF/DNS rebinding defense, container `--network none`                                                                                                                                                                          | **BLOCKED** |
+| **2** | **Cross-Capsule Data**      | Read another capsule's SQLite database or blob files via path traversal (`../`)              | Per-capsule isolated host volumes, `@capsule/sdk` path traversal defense (`FileStorageError`)                                                                                                                                                                              | **BLOCKED** |
+| **3** | **Secret Discovery**        | Read platform master secrets or connector tokens from environment or files                   | Zero-secret injection into container env, AES-256-GCM encryption at rest, masked logging                                                                                                                                                                                   | **BLOCKED** |
+| **4** | **Session / Cookie Theft**  | Steal cookies across origins or from the dashboard                                           | `HttpOnly`, `SameSite=Lax`, domain separation (`*.apps.localhost` vs `dashboard.localhost`)                                                                                                                                                                                | **BLOCKED** |
+| **5** | **Resource Quotas**         | Exceed CPU, memory, disk quota, or request timeout                                           | Container cgroup limits (`--memory 256m`, `--cpus 0.5`), SQLite `PRAGMA max_page_count` (`SQLITE_FULL`), edge proxy timeouts                                                                                                                                               | **BLOCKED** |
+| **6** | **Sandbox Escape**          | Write outside allowed paths, use raw sockets, fork bomb, or exploit host kernel              | `GVisorDriver` user-space kernel (Sentry Go syscall implementation, no shared kernel with host), read-only rootfs (`--read-only`, `/app:ro`), non-root (`1000:1000`), `--cap-drop=ALL`, `no-new-privileges`, `--pids-limit 64`, `--network none`, Production Startup Guard | **BLOCKED** |
+| **7** | **Identity Header Forgery** | Forge HMAC signature, use `alg: none`, replay expired tokens, or cross-app audience mismatch | HMAC-SHA256 signature verification, `alg` whitelist, timestamp expiry check, `aud` matching in `@capsule/sdk`                                                                                                                                                              | **BLOCKED** |
+| **8** | **Undeclared Capabilities** | Invoke undeclared connectors or unauthorized AI capabilities                                 | Control-plane capability verification before broker invocation (`403 CAPABILITY_DENIED`)                                                                                                                                                                                   | **BLOCKED** |
+| **9** | **Unauthorized Escalation** | Add capabilities in update without owner approval                                            | Capability escalation engine (`detect_capability_escalation`), scoped publish token self-approval block (`403 FORBIDDEN`)                                                                                                                                                  | **BLOCKED** |
 
 ---
 
 ## Detailed Findings & Hardening Recommendations
 
 ### Finding SEC-001: Development Container Driver (`DockerDevDriver`) Boundary Limitations
+
 - **Severity**: **RESOLVED / CLOSED** (Previously MEDIUM Architecture Caveat)
 - **Component**: `packages/sandbox-driver/src/drivers/gvisor.ts` & `docker.ts`
-- **Resolution (Prompt 21B)**:  
+- **Resolution (Prompt 21B)**:
   1. **Production GVisorDriver (Option A)**: Implemented in `packages/sandbox-driver/src/drivers/gvisor.ts` using gVisor's `runsc` runtime. The Sentry architecture intercepts and handles all Linux system calls in user-space Go, preventing untrusted guest code from ever executing host kernel code or accessing host namespaces.
   2. **Production Startup Guard**: Implemented in `DockerDevDriver` (`packages/sandbox-driver/src/drivers/docker.ts`). If `NODE_ENV === 'production'`, `DockerDevDriver` strictly **refuses to initialize**, throwing a `[SECURITY INVARIANT VIOLATION]` error unless explicitly overridden with `ALLOW_INSECURE_DEV_DRIVER=true` (which logs an urgent multi-line warning banner).
   3. **Driver Conformance Suite**: Added `packages/sandbox-driver/tests/driver_conformance.test.ts` running 43 tests across both drivers covering interface contracts, security flags, lifecycle transitions, cold-start latency measurements, and startup guards.
@@ -49,6 +51,7 @@ A deliberately malicious test application (`examples/malicious-app`) and an auto
 ---
 
 ### Finding SEC-002: Default Signing Key in Local Emulator Mode
+
 - **Severity**: **LOW** (Hardening)
 - **Component**: `packages/sdk/src/identity.ts`
 - **Description**:  
@@ -61,6 +64,7 @@ A deliberately malicious test application (`examples/malicious-app`) and an auto
 ---
 
 ### Finding SEC-003: Key Rotation Automation for Encrypted Credentials
+
 - **Severity**: **INFORMATIONAL** (Operational Hardening)
 - **Component**: `services/control-plane/src/crypto.py` & `services/control-plane/src/db/models.py`
 - **Description**:  
@@ -75,6 +79,7 @@ A deliberately malicious test application (`examples/malicious-app`) and an auto
 ## Test Execution Details
 
 ### Automated Test Output
+
 - **Vitest Red-Team Suite (`tests/redteam/redteam.test.ts`)**: **25/25 tests passed (100%)**
 - **Vitest Driver Conformance Suite (`packages/sandbox-driver/tests/driver_conformance.test.ts`)**: **43/43 tests passed (100%)**
 - **Pytest Security Suite (`test_capabilities_escalation.py`, `test_credential_broker.py`, `test_cross_user_access.py`, `test_constraints.py`)**: **16/16 tests passed (100%)**

@@ -34,6 +34,7 @@ Task 0.1 (Monorepo & Tooling)
 ## Detailed Task Breakdown
 
 ### Task 0.1: Monorepo Foundation & Tooling Setup
+
 - **Goal:** Initialize monorepo workspace configuration, linting, formatting, type checking, and Docker Compose development environment.
 - **Files / Modules Touched:**
   - `package.json`, `pnpm-workspace.yaml` (or npm/yarn workspaces)
@@ -50,6 +51,7 @@ Task 0.1 (Monorepo & Tooling)
 ---
 
 ### Task 0.2: Shared Manifest Schema & Validation Library
+
 - **Goal:** Implement the manifest validation library conforming to `docs/manifest-spec/` (`capsule.manifest.schema.json`) with strict syntax, schema, and semantic checks.
 - **Files / Modules Touched:**
   - `packages/manifest-schema/src/index.ts`
@@ -66,6 +68,7 @@ Task 0.1 (Monorepo & Tooling)
 ---
 
 ### Task 0.3: Control Plane Database Models & Migrations
+
 - **Goal:** Set up PostgreSQL database models and migrations for the control plane based on `docs/backend-database-schema/`.
 - **Files / Modules Touched:**
   - `services/control-plane/src/db/models.py` (or TypeScript Prisma/Drizzle models)
@@ -81,6 +84,7 @@ Task 0.1 (Monorepo & Tooling)
 ---
 
 ### Task 0.4: Storage & Object Store Driver
+
 - **Goal:** Implement an abstract `StorageDriver` with a `LocalStorageDriver` (for local dev) and `S3StorageDriver` (for S3/MinIO) for storing version artifacts, SQLite snapshots, and file uploads.
 - **Files / Modules Touched:**
   - `services/control-plane/src/storage/driver.py`
@@ -96,6 +100,7 @@ Task 0.1 (Monorepo & Tooling)
 ---
 
 ### Task 0.5: Sandbox Driver Interface & Docker Sandbox Driver
+
 - **Goal:** Define the `SandboxDriver` interface (Project Rule 9) and implement a `DockerSandboxDriver` using Docker Desktop (WSL2 backend) for isolating untrusted Capsule execution.
 - **Files / Modules Touched:**
   - `packages/sandbox-driver/src/interface.ts` (or Python equivalent in control plane)
@@ -112,6 +117,7 @@ Task 0.1 (Monorepo & Tooling)
 ---
 
 ### Task 0.6: Reference Application & Platform SDK (`@capsule/sdk`)
+
 - **Goal:** Create the blessed Node.js 22 + TypeScript reference application and minimal platform SDK.
 - **Files / Modules Touched:**
   - `packages/sdk/package.json`
@@ -132,6 +138,7 @@ Task 0.1 (Monorepo & Tooling)
 ---
 
 ### Task 0.7: Isolated Build Service
+
 - **Goal:** Implement the isolated builder that receives an app directory or source tarball, runs dependency installation and build in a restricted container, and outputs a versioned artifact.
 - **Files / Modules Touched:**
   - `services/builder/Dockerfile`
@@ -147,6 +154,7 @@ Task 0.1 (Monorepo & Tooling)
 ---
 
 ### Task 0.8: Control Plane API
+
 - **Goal:** Implement the authoritative REST API for creating apps, validating manifests, publishing versions, managing sharing, and querying status/logs.
 - **Files / Modules Touched:**
   - `services/control-plane/src/main.py`
@@ -166,6 +174,7 @@ Task 0.1 (Monorepo & Tooling)
 ---
 
 ### Task 0.9: Edge Proxy & Origin Routing
+
 - **Goal:** Implement the reverse proxy providing per-Capsule origin isolation, authentication (OIDC/session verification), and request forwarding to the active sandbox container.
 - **Files / Modules Touched:**
   - `services/edge-proxy/src/index.ts` (or Go/Python proxy)
@@ -183,6 +192,7 @@ Task 0.1 (Monorepo & Tooling)
 ---
 
 ### Task 0.10: CLI (`capsule`)
+
 - **Goal:** Build the developer and agent CLI implementing authentication, manifest initialization, validation, publishing, and sharing.
 - **Files / Modules Touched:**
   - `packages/cli/package.json`
@@ -204,6 +214,7 @@ Task 0.1 (Monorepo & Tooling)
 ---
 
 ### Task 0.11: Local Development Emulator (`capsule dev`)
+
 - **Goal:** Implement `capsule dev` to start the local developer emulator providing a local SQLite instance and mock identity context.
 - **Files / Modules Touched:**
   - `packages/cli/src/commands/dev.ts`
@@ -220,6 +231,7 @@ Task 0.1 (Monorepo & Tooling)
 ---
 
 ### Task 0.12: End-to-End "Prove the Loop" Integration Test
+
 - **Goal:** Execute the full Phase 0 acceptance test verifying the complete workflow under 60 seconds.
 - **Files / Modules Touched:**
   - `tests/e2e/phase0_loop.test.ts`

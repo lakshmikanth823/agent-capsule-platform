@@ -18,7 +18,7 @@ export interface AppMetadata {
   manifest: Record<string, any>;
   bundlePath?: string;
   dataDir?: string;
-  defaultScope?: 'org' | 'restricted';
+  defaultScope?: "org" | "restricted";
 }
 
 export interface UserContext {
@@ -36,7 +36,7 @@ export interface ShareRecord {
   userEmail?: string;
   groupName?: string;
   appRole: string;
-  status: 'active' | 'revoked' | 'expired';
+  status: "active" | "revoked" | "expired";
   grantedAt: Date;
   expiresAt?: Date;
 }
@@ -54,7 +54,7 @@ export class AccessManager {
 
   registerApp(app: AppMetadata): void {
     this.appRegistry.set(app.appKey, {
-      defaultScope: 'org',
+      defaultScope: "org",
       ...app,
     });
   }
@@ -63,7 +63,7 @@ export class AccessManager {
     return this.appRegistry.get(appKey);
   }
 
-  setAppDefaultScope(appKey: string, scope: 'org' | 'restricted'): void {
+  setAppDefaultScope(appKey: string, scope: "org" | "restricted"): void {
     const app = this.appRegistry.get(appKey);
     if (app) {
       app.defaultScope = scope;
@@ -86,7 +86,7 @@ export class AccessManager {
       userEmail: params.userEmail,
       groupName: params.groupName,
       appRole: params.appRole,
-      status: 'active',
+      status: "active",
       grantedAt: new Date(),
       expiresAt: params.expiresAt,
     };
@@ -97,7 +97,7 @@ export class AccessManager {
   revokeShare(shareId: string): boolean {
     const share = this.shares.get(shareId);
     if (share) {
-      share.status = 'revoked';
+      share.status = "revoked";
       return true;
     }
     return false;
@@ -109,7 +109,7 @@ export class AccessManager {
         share.appKey === appKey &&
         (share.userEmail === userEmailOrId || share.userId === userEmailOrId)
       ) {
-        share.status = 'revoked';
+        share.status = "revoked";
       }
     }
   }
@@ -126,15 +126,15 @@ export class AccessManager {
 
   evaluateAccess(user: UserContext, app: AppMetadata): AccessEvaluation {
     // 0. Organization must be active
-    if (app.orgStatus === 'suspended') {
+    if (app.orgStatus === "suspended") {
       return {
         allowed: false,
-        reason: 'Organization is suspended.',
+        reason: "Organization is suspended.",
       };
     }
 
     // 1. App must be active
-    if (app.status !== 'active') {
+    if (app.status !== "active") {
       return {
         allowed: false,
         reason: `Capsule ${app.appKey} is ${app.status}.`,
@@ -145,21 +145,22 @@ export class AccessManager {
     if (user.orgId !== app.organizationId) {
       return {
         allowed: false,
-        reason: 'User does not belong to the organization that owns this capsule.',
+        reason:
+          "User does not belong to the organization that owns this capsule.",
       };
     }
 
-    const platformRole = user.platformRole === 'owner' ? 'owner' : 'user';
+    const platformRole = user.platformRole === "owner" ? "owner" : "user";
     const declaredRoles: string[] = Array.isArray(app.manifest?.roles)
       ? app.manifest.roles
       : [];
 
     // 3. App Owner always has full access
-    if (platformRole === 'owner') {
+    if (platformRole === "owner") {
       return {
         allowed: true,
-        platformRole: 'owner',
-        appRoles: declaredRoles.length > 0 ? declaredRoles : ['admin'],
+        platformRole: "owner",
+        appRoles: declaredRoles.length > 0 ? declaredRoles : ["admin"],
       };
     }
 
@@ -170,14 +171,14 @@ export class AccessManager {
     const userShares = appShares.filter(
       (s) =>
         (s.userId && s.userId === user.id) ||
-        (s.userEmail && s.userEmail.toLowerCase() === user.email.toLowerCase())
+        (s.userEmail && s.userEmail.toLowerCase() === user.email.toLowerCase()),
     );
 
     // If user has explicitly revoked shares and NO active shares, block them immediately
     const activeUserShares = userShares.filter(
-      (s) => s.status === 'active' && (!s.expiresAt || s.expiresAt > now)
+      (s) => s.status === "active" && (!s.expiresAt || s.expiresAt > now),
     );
-    const hasRevokedUserShare = userShares.some((s) => s.status === 'revoked');
+    const hasRevokedUserShare = userShares.some((s) => s.status === "revoked");
 
     if (activeUserShares.length > 0) {
       const mappedRoles = activeUserShares.map((s) => s.appRole);
@@ -191,7 +192,7 @@ export class AccessManager {
     if (hasRevokedUserShare) {
       return {
         allowed: false,
-        reason: 'Access to this capsule has been revoked.',
+        reason: "Access to this capsule has been revoked.",
       };
     }
 
@@ -201,8 +202,8 @@ export class AccessManager {
         (s) =>
           s.groupName &&
           user.groups!.includes(s.groupName) &&
-          s.status === 'active' &&
-          (!s.expiresAt || s.expiresAt > now)
+          s.status === "active" &&
+          (!s.expiresAt || s.expiresAt > now),
       );
 
       if (activeGroupShares.length > 0) {
@@ -216,9 +217,10 @@ export class AccessManager {
     }
 
     // 6. Check default org policy
-    const defaultScope = app.defaultScope || 'org';
-    if (defaultScope === 'org' && user.orgId === app.organizationId) {
-      const defaultRole = declaredRoles.length > 0 ? declaredRoles[0] : 'employee';
+    const defaultScope = app.defaultScope || "org";
+    if (defaultScope === "org" && user.orgId === app.organizationId) {
+      const defaultRole =
+        declaredRoles.length > 0 ? declaredRoles[0] : "employee";
       return {
         allowed: true,
         platformRole,
@@ -228,7 +230,7 @@ export class AccessManager {
 
     return {
       allowed: false,
-      reason: 'No active share or permission found for this user.',
+      reason: "No active share or permission found for this user.",
     };
   }
 }

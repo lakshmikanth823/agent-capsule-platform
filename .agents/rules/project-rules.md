@@ -1,6 +1,7 @@
 # PROJECT RULES: Software Capsule Platform
 
 ## Source of Truth (Highest Priority First)
+
 1. `docs/TRD.md`
 2. `docs/api-cli-spec`, `docs/manifest-spec`, `docs/backend-database-schema`
 3. `docs/PRD.md`
@@ -12,12 +13,14 @@
 ---
 
 ## Scope
+
 - Build only the phase and task assigned by the user. Do not add features from later phases.
 - Respect the non-goals in the PRD.
 
 ---
 
 ## Security Invariants (NEVER violate, even to make a test pass)
+
 1. **Hostile Code**: Treat all application code as hostile.
 2. **Process Isolation**: Application code never runs inside the control-plane process.
 3. **No Raw Secrets**: Applications never receive raw secrets, API keys, or long-lived credentials.
@@ -31,6 +34,7 @@
 ---
 
 ## Workflow for Every Task
+
 1. Produce an implementation plan first and wait for user approval.
 2. Write tests alongside the code. Run them and show results.
 3. Keep commits small with clear messages.
@@ -39,6 +43,7 @@
 ---
 
 ## Code Quality
+
 - Use the language and tooling that `docs/TRD.md` specifies.
 - Typed code, linting, no dead code, configuration via environment variables.
 - Provide `.env.example`. Never commit secrets.

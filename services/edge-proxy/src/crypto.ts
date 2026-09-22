@@ -1,4 +1,4 @@
-import crypto from 'node:crypto';
+import crypto from "node:crypto";
 
 export interface JwtHeader {
   alg: string;
@@ -7,20 +7,20 @@ export interface JwtHeader {
 }
 
 function base64UrlEncode(data: string | Buffer): string {
-  const buf = typeof data === 'string' ? Buffer.from(data, 'utf8') : data;
+  const buf = typeof data === "string" ? Buffer.from(data, "utf8") : data;
   return buf
-    .toString('base64')
-    .replace(/=/g, '')
-    .replace(/\+/g, '-')
-    .replace(/\//g, '_');
+    .toString("base64")
+    .replace(/=/g, "")
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_");
 }
 
 function base64UrlDecode(str: string): string {
-  let base64 = str.replace(/-/g, '+').replace(/_/g, '/');
+  let base64 = str.replace(/-/g, "+").replace(/_/g, "/");
   while (base64.length % 4 !== 0) {
-    base64 += '=';
+    base64 += "=";
   }
-  return Buffer.from(base64, 'base64').toString('utf8');
+  return Buffer.from(base64, "base64").toString("utf8");
 }
 
 /**
@@ -29,9 +29,9 @@ function base64UrlDecode(str: string): string {
 export function signJwt(
   payload: Record<string, any>,
   secret: string,
-  kid?: string
+  kid?: string,
 ): string {
-  const header: JwtHeader = { alg: 'HS256', typ: 'JWT' };
+  const header: JwtHeader = { alg: "HS256", typ: "JWT" };
   if (kid) {
     header.kid = kid;
   }
@@ -41,7 +41,7 @@ export function signJwt(
   const dataToSign = `${encodedHeader}.${encodedPayload}`;
 
   const signature = crypto
-    .createHmac('sha256', secret)
+    .createHmac("sha256", secret)
     .update(dataToSign)
     .digest();
   const encodedSignature = base64UrlEncode(signature);
@@ -55,11 +55,11 @@ export function signJwt(
  */
 export function verifyJwt<T = Record<string, any>>(
   token: string,
-  keys: Record<string, string>
+  keys: Record<string, string>,
 ): { header: JwtHeader; payload: T } | null {
-  if (!token || typeof token !== 'string') return null;
+  if (!token || typeof token !== "string") return null;
 
-  const parts = token.split('.');
+  const parts = token.split(".");
   if (parts.length !== 3) return null;
 
   const [encodedHeader, encodedPayload, encodedSignature] = parts;
@@ -80,7 +80,7 @@ export function verifyJwt<T = Record<string, any>>(
     // Verify HMAC-SHA256 signature
     const dataToSign = `${encodedHeader}.${encodedPayload}`;
     const expectedSig = crypto
-      .createHmac('sha256', secret)
+      .createHmac("sha256", secret)
       .update(dataToSign)
       .digest();
     const expectedEncodedSig = base64UrlEncode(expectedSig);
@@ -89,14 +89,14 @@ export function verifyJwt<T = Record<string, any>>(
     if (
       !crypto.timingSafeEqual(
         Buffer.from(encodedSignature),
-        Buffer.from(expectedEncodedSig)
+        Buffer.from(expectedEncodedSig),
       )
     ) {
       return null;
     }
 
     // Check expiration if present
-    if (payload.exp && typeof payload.exp === 'number') {
+    if (payload.exp && typeof payload.exp === "number") {
       const nowSeconds = Math.floor(Date.now() / 1000);
       if (nowSeconds >= payload.exp) {
         return null; // Expired

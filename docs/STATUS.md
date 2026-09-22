@@ -198,7 +198,6 @@ The following fixes are required to achieve full production readiness, ordered b
    - [Completed] Implemented `GVisorDriver` (`runsc`) in `packages/sandbox-driver/src/drivers/gvisor.ts` to provide true user-space kernel isolation and Netstack proxy enforcement (Prompt 21A, Option A).
    - Retained `FirecrackerDriver` for Phase 2 hyper-scale density.
 
-
 3. **Fix 3 (High Security) — Registrable Domain (eTLD+1) Enforcement**:
    - Update `services/edge-proxy/src/config.ts` to parse domains using the Public Suffix List (`psl`).
    - Refuse to start in production if `APP_DOMAIN` and `DASHBOARD_DOMAIN` share the same registrable domain (e.g. `apps.example.com` and `platform.example.com`).

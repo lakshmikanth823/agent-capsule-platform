@@ -8,7 +8,7 @@
  * - In local emulator mode, provides safe local emulation without requiring external credentials.
  */
 
-import { isEmulatorMode } from './emulator.js';
+import { isEmulatorMode } from "./emulator.js";
 
 export interface ConnectorClient {
   readonly name: string;
@@ -29,7 +29,7 @@ export interface SheetsReadPayload {
 
 export interface SheetsReadResponse {
   connector: string;
-  status: 'success' | 'failed';
+  status: "success" | "failed";
   spreadsheet_id: string;
   range: string;
   major_dimension: string;
@@ -43,17 +43,20 @@ export class ConnectorError extends Error {
     public readonly code: string,
     public readonly connector: string,
     public readonly statusCode: number,
-    public readonly details?: any
+    public readonly details?: any,
   ) {
     super(message);
-    this.name = 'ConnectorError';
+    this.name = "ConnectorError";
   }
 }
 
 export class PlatformConnectorClient implements ConnectorClient {
   constructor(public readonly name: string) {}
 
-  async invoke<T = any>(payload: any, options: ConnectorInvokeOptions = {}): Promise<T> {
+  async invoke<T = any>(
+    payload: any,
+    options: ConnectorInvokeOptions = {},
+  ): Promise<T> {
     // 1. Local Emulator Mode
     if (isEmulatorMode() && !process.env.CAPSULE_BROKER_URL) {
       return this.emulateLocal<T>(payload);
@@ -64,44 +67,42 @@ export class PlatformConnectorClient implements ConnectorClient {
       options.brokerUrl ||
       process.env.CAPSULE_BROKER_URL ||
       process.env.CONTROL_PLANE_URL ||
-      'http://localhost:8000';
+      "http://localhost:8000";
 
     const appKey =
       options.appKey ||
       process.env.CAPSULE_KEY ||
       process.env.CAPSULE_ID ||
-      'current-app';
+      "current-app";
 
     const identityHeader =
-      options.identityHeader ||
-      process.env.CAPSULE_IDENTITY_TOKEN ||
-      '';
+      options.identityHeader || process.env.CAPSULE_IDENTITY_TOKEN || "";
 
     const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-      'x-capsule-key': appKey,
+      "Content-Type": "application/json",
+      "x-capsule-key": appKey,
     };
 
     if (identityHeader) {
-      headers['x-capsule-identity'] = identityHeader;
+      headers["x-capsule-identity"] = identityHeader;
     }
 
-    const endpoint = `${brokerUrl.replace(/\/$/, '')}/v1/connectors/${encodeURIComponent(this.name)}/invoke`;
+    const endpoint = `${brokerUrl.replace(/\/$/, "")}/v1/connectors/${encodeURIComponent(this.name)}/invoke`;
 
     let response: Response;
     try {
       response = await fetch(endpoint, {
-        method: 'POST',
+        method: "POST",
         headers,
         body: JSON.stringify(payload ?? {}),
       });
     } catch (err: any) {
       throw new ConnectorError(
         `Failed to reach credential broker at ${endpoint}: ${err.message}`,
-        'BROKER_UNREACHABLE',
+        "BROKER_UNREACHABLE",
         this.name,
         503,
-        err
+        err,
       );
     }
 
@@ -113,39 +114,46 @@ export class PlatformConnectorClient implements ConnectorClient {
     }
 
     if (!response.ok) {
-      const code = responseData?.detail?.code || responseData?.code || 'CONNECTOR_ERROR';
+      const code =
+        responseData?.detail?.code || responseData?.code || "CONNECTOR_ERROR";
       const message =
         responseData?.detail?.message ||
         responseData?.message ||
         `Connector '${this.name}' failed with HTTP ${response.status}`;
-      throw new ConnectorError(message, code, this.name, response.status, responseData);
+      throw new ConnectorError(
+        message,
+        code,
+        this.name,
+        response.status,
+        responseData,
+      );
     }
 
     return responseData as T;
   }
 
   private emulateLocal<T>(payload: any): T {
-    if (this.name === 'fake.echo') {
+    if (this.name === "fake.echo") {
       return {
-        connector: 'fake.echo',
-        status: 'success',
+        connector: "fake.echo",
+        status: "success",
         echo: payload,
         identity: {
-          userId: 'dev-user-001',
-          email: 'developer@example.com',
-          roles: ['employee', 'manager'],
+          userId: "dev-user-001",
+          email: "developer@example.com",
+          roles: ["employee", "manager"],
         },
         credential_attached: true,
         emulator: true,
       } as unknown as T;
     }
 
-    if (this.name === 'slack.post') {
-      const channel = payload?.channel || '#dev';
-      const text = payload?.text || payload?.message || '';
+    if (this.name === "slack.post") {
+      const channel = payload?.channel || "#dev";
+      const text = payload?.text || payload?.message || "";
       return {
-        connector: 'slack.post',
-        status: 'success',
+        connector: "slack.post",
+        status: "success",
         ok: true,
         channel,
         ts: `${Date.now() / 1000}`,
@@ -154,19 +162,20 @@ export class PlatformConnectorClient implements ConnectorClient {
       } as unknown as T;
     }
 
-    if (this.name === 'sheets.read' || this.name === 'google_sheets.read') {
-      const spreadsheetId = payload?.spreadsheet_id || payload?.spreadsheetId || 'sheet-demo-1';
-      const range = payload?.range || 'A1:Z100';
+    if (this.name === "sheets.read" || this.name === "google_sheets.read") {
+      const spreadsheetId =
+        payload?.spreadsheet_id || payload?.spreadsheetId || "sheet-demo-1";
+      const range = payload?.range || "A1:Z100";
       return {
-        connector: 'sheets.read',
-        status: 'success',
+        connector: "sheets.read",
+        status: "success",
         spreadsheet_id: spreadsheetId,
         range,
-        major_dimension: 'ROWS',
+        major_dimension: "ROWS",
         values: [
-          ['ID', 'Name', 'Department'],
-          ['EMP-01', 'Alice Smith', 'Engineering'],
-          ['EMP-02', 'Bob Jones', 'Product'],
+          ["ID", "Name", "Department"],
+          ["EMP-01", "Alice Smith", "Engineering"],
+          ["EMP-02", "Bob Jones", "Product"],
         ],
         emulator: true,
       } as unknown as T;
@@ -174,7 +183,7 @@ export class PlatformConnectorClient implements ConnectorClient {
 
     return {
       connector: this.name,
-      status: 'success',
+      status: "success",
       echo: payload,
       emulator: true,
     } as unknown as T;
