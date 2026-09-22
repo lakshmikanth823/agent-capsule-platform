@@ -208,28 +208,6 @@ jobs:
     name: Red-Team Security Suite
     runs-on: ubuntu-latest
     needs: [test-ts, test-py]
-    services:
-      postgres:
-        image: postgres:16-alpine
-        env:
-          POSTGRES_DB: capsule_redteam
-          POSTGRES_USER: capsule_user
-          POSTGRES_PASSWORD: test_password
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U capsule_user -d capsule_redteam"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 5
-    env:
-      DATABASE_URL: postgresql+asyncpg://capsule_user:test_password@localhost:5432/capsule_redteam
-      SYNC_DATABASE_URL: postgresql://capsule_user:test_password@localhost:5432/capsule_redteam
-      PLATFORM_ENV: test
-      AUTH_PROVIDER: mock
-      JWT_SIGNING_SECRET: test-jwt-secret
-      STORAGE_DRIVER: local
-      STORAGE_LOCAL_DIR: /tmp/capsule-redteam-storage
     steps:
       - uses: actions/checkout@v4
 
@@ -239,37 +217,21 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
 
-      - name: Setup Python ${{ env.PYTHON_VERSION }}
-        uses: actions/setup-python@v5
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
-          cache: pip
-          cache-dependency-path: services/control-plane/requirements.txt
-
-      - name: Install all dependencies
-        run: |
-          npm ci
-          python -m venv .venv
-          .venv/bin/pip install --upgrade pip
-          .venv/bin/pip install -r services/control-plane/requirements.txt
+      - name: Install dependencies
+        run: npm ci
 
       - name: Build monorepo
         run: npm run build
 
-      - name: Run Alembic migrations
-        run: .venv/bin/python -m alembic -c services/control-plane/alembic.ini upgrade head
-
       - name: Run red-team suite
         run: npm run test:redteam
-        # test:redteam must be defined in package.json scripts
-        # It runs the adversarial/security test files (e.g. tests/red-team/)
 
       - name: Upload red-team report
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: red-team-report-${{ github.sha }}
-          path: "tests/red-team/report/**"
+          path: "tests/redteam/report/**"
           if-no-files-found: ignore
 
   # ── Final gate — all checks must pass ───────────────────────────────────────

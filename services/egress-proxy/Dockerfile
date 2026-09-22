@@ -19,15 +19,14 @@ FROM node:22-slim AS runtime
 
 RUN groupadd --gid 1001 capsule \
     && useradd --uid 1001 --gid 1001 --no-create-home capsule \
-    && apt-get update && apt-get install -y --no-install-recommends curl \
-    && rm -rf /var/lib/apt/lists/*
+    && apt-get update && apt-get upgrade -y && apt-get install -y --no-install-recommends curl \
+    && rm -rf /var/lib/apt/lists/* \
+    && rm -rf /usr/local/lib/node_modules/npm
 
 WORKDIR /app
 
 COPY --from=builder /build/services/egress-proxy/dist ./dist
 COPY --from=builder /build/services/egress-proxy/package.json ./
-
-RUN npm install --omit=dev --ignore-scripts
 
 USER capsule
 

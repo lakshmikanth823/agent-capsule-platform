@@ -18,9 +18,10 @@ RUN npm run build --workspace=services/builder
 FROM node:22-slim AS runtime
 
 # Builder service needs docker CLI to launch sandboxed build containers
-RUN apt-get update && apt-get install -y --no-install-recommends \
+RUN apt-get update && apt-get upgrade -y && apt-get install -y --no-install-recommends \
     curl docker.io \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* \
+    && rm -rf /usr/local/lib/node_modules/npm
 
 # Non-root user but member of docker group so it can reach the Docker socket
 RUN groupadd --gid 1001 capsule \
@@ -30,8 +31,6 @@ WORKDIR /app
 
 COPY --from=builder /build/services/builder/dist ./dist
 COPY --from=builder /build/services/builder/package.json ./
-
-RUN npm install --omit=dev --ignore-scripts
 
 USER capsule
 

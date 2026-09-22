@@ -12,8 +12,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY services/control-plane/requirements.txt ./requirements.txt
 RUN python -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
-RUN pip install --no-cache-dir --upgrade pip \
-    && pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir --upgrade pip "setuptools>=78.1.1" \
+    && pip install --no-cache-dir -r requirements.txt \
+    && rm -rf /opt/venv/lib/python3.12/site-packages/setuptools*
 
 # ── Stage 2: runtime image ───────────────────────────────────────────────────
 FROM python:3.12-slim AS runtime
@@ -23,7 +24,7 @@ RUN groupadd --gid 1001 capsule \
     && useradd --uid 1001 --gid 1001 --no-create-home capsule
 
 # Runtime libs only (libpq for asyncpg)
-RUN apt-get update && apt-get install -y --no-install-recommends \
+RUN apt-get update && apt-get upgrade -y && apt-get install -y --no-install-recommends \
     libpq5 curl awscli \
     && rm -rf /var/lib/apt/lists/*
 

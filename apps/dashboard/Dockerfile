@@ -20,6 +20,8 @@ RUN npm run build --workspace=apps/dashboard
 # ── Stage 2: nginx static server ─────────────────────────────────────────────
 FROM nginx:1.27-alpine AS runtime
 
+RUN apk update && apk upgrade --no-cache
+
 # Remove default nginx config
 RUN rm /etc/nginx/conf.d/default.conf
 

@@ -9,7 +9,7 @@ COPY packages/ packages/
 COPY services/edge-proxy/package.json services/edge-proxy/
 COPY services/edge-proxy/tsconfig.json services/edge-proxy/
 
-RUN npm ci --workspace=services/edge-proxy --include-workspace-root
+RUN npm ci
 
 RUN npm run build --workspace=@capsule/manifest-schema \
  && npm run build --workspace=@capsule/sdk \
@@ -24,8 +24,9 @@ FROM node:22-slim AS runtime
 
 RUN groupadd --gid 1001 capsule \
     && useradd --uid 1001 --gid 1001 --no-create-home capsule \
-    && apt-get update && apt-get install -y --no-install-recommends curl \
-    && rm -rf /var/lib/apt/lists/*
+    && apt-get update && apt-get upgrade -y && apt-get install -y --no-install-recommends curl \
+    && rm -rf /var/lib/apt/lists/* \
+    && rm -rf /usr/local/lib/node_modules/npm
 
 WORKDIR /app
 
