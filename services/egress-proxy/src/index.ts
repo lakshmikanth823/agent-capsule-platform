@@ -26,8 +26,13 @@ export interface EgressProxyConfig {
 }
 
 export class EgressPolicyManager {
-  private appPolicies = new Map<string, EgressPolicy>();
+  private appPolicies = new Map<string, EgressPolicy & { orgId?: string }>();
   private orgCeilings = new Map<string, EgressRule[]>(); // orgId -> EgressRule[]
+  private frozenOrgs = new Set<string>();
+  private suspendedApps = new Set<string>();
+  private egressUsage = new Map<string, { bytes: number; resetAt: number }>();
+  private appByteLimits = new Map<string, number>();
+  public defaultDailyByteLimit = 100 * 1024 * 1024; // 100 MB default
 
   registerAppPolicy(appKey: string, allowlist: (EgressRule | string)[], orgId?: string): void {
     const normalizedRules: EgressRule[] = allowlist.map((r) =>
@@ -40,10 +45,19 @@ export class EgressPolicyManager {
       appKey,
       appAllowlist: normalizedRules,
       orgCeiling,
+      orgId,
     });
   }
 
+  setPolicy(appKey: string, policy: { appKey?: string; appAllowlist: (EgressRule | string)[]; orgCeiling?: EgressRule[]; orgId?: string; dailyByteLimit?: number }): void {
+    this.registerAppPolicy(appKey, policy.appAllowlist, policy.orgId);
+    if (policy.dailyByteLimit) {
+      this.appByteLimits.set(appKey, policy.dailyByteLimit);
+    }
+  }
+
   setOrgCeiling(orgId: string, ceiling: (EgressRule | string)[]): void {
+
     const normalizedCeiling: EgressRule[] = ceiling.map((r) =>
       typeof r === 'string' ? { host: r } : r
     );
@@ -51,19 +65,74 @@ export class EgressPolicyManager {
 
     // Update any existing app policies for this org
     for (const [, policy] of this.appPolicies.entries()) {
-      policy.orgCeiling = normalizedCeiling;
+      if (policy.orgId === orgId) {
+        policy.orgCeiling = normalizedCeiling;
+      }
     }
   }
 
-  getPolicy(appKey: string): EgressPolicy | undefined {
+  freezeOrg(orgId: string): void {
+    this.frozenOrgs.add(orgId);
+  }
+
+  resumeOrg(orgId: string): void {
+    this.frozenOrgs.delete(orgId);
+  }
+
+  isOrgFrozen(orgId: string): boolean {
+    return this.frozenOrgs.has(orgId);
+  }
+
+  suspendApp(appKey: string): void {
+    this.suspendedApps.add(appKey);
+  }
+
+  resumeApp(appKey: string): void {
+    this.suspendedApps.delete(appKey);
+  }
+
+  isAppSuspended(appKey: string): boolean {
+    if (this.suspendedApps.has(appKey)) return true;
+    const policy = this.appPolicies.get(appKey);
+    if (policy && policy.orgId && this.frozenOrgs.has(policy.orgId)) return true;
+    return false;
+  }
+
+
+  checkAndTrackEgress(appKey: string, bytes: number, limitBytes?: number): { allowed: boolean; currentBytes: number; limitBytes: number } {
+    const limit = limitBytes || this.appByteLimits.get(appKey) || this.defaultDailyByteLimit;
+    const now = Date.now();
+    const usage = this.egressUsage.get(appKey) || { bytes: 0, resetAt: now + 86400000 };
+
+    // Reset daily counter if expired
+    if (now > usage.resetAt) {
+      usage.bytes = 0;
+      usage.resetAt = now + 86400000;
+    }
+
+    if (usage.bytes + bytes > limit) {
+      return { allowed: false, currentBytes: usage.bytes, limitBytes: limit };
+    }
+
+    usage.bytes += bytes;
+    this.egressUsage.set(appKey, usage);
+    return { allowed: true, currentBytes: usage.bytes, limitBytes: limit };
+  }
+
+  getPolicy(appKey: string): (EgressPolicy & { orgId?: string }) | undefined {
     return this.appPolicies.get(appKey);
   }
 
   clear(): void {
     this.appPolicies.clear();
     this.orgCeilings.clear();
+    this.frozenOrgs.clear();
+    this.suspendedApps.clear();
+    this.egressUsage.clear();
+    this.appByteLimits.clear();
   }
 }
+
 
 export function createEgressProxyServer(options: {
   config?: EgressProxyConfig;
@@ -77,7 +146,10 @@ export function createEgressProxyServer(options: {
 
   function extractAppKey(req: http.IncomingMessage): string {
     // 1. Check custom headers
-    const appKeyHeader = req.headers['x-capsule-key'] || req.headers['x-capsule-id'];
+    const appKeyHeader =
+      req.headers['x-capsule-key'] ||
+      req.headers['x-capsule-id'] ||
+      req.headers['x-capsule-app-key'];
     if (appKeyHeader && typeof appKeyHeader === 'string') {
       return appKeyHeader;
     }
@@ -117,7 +189,82 @@ export function createEgressProxyServer(options: {
     }
 
     const targetHost = targetUrl.hostname;
-    const targetPort = targetUrl.port ? parseInt(targetUrl.port, 10) : 80;
+    const targetPort = targetUrl.port
+      ? parseInt(targetUrl.port, 10)
+      : targetUrl.protocol === 'https:'
+      ? 443
+      : 80;
+
+    // 0. Kill Switch & Suspension Check
+    const orgId =
+      (req.headers['x-capsule-org-id'] as string) ||
+      policyManager.getPolicy(appKey)?.orgId;
+    if (orgId && policyManager.isOrgFrozen(orgId)) {
+      logger.logEvent({
+        appKey,
+        method,
+        host: targetHost,
+        port: targetPort,
+        decision: 'denied',
+        reason: 'Organization is frozen',
+      });
+      res.writeHead(403, { 'Content-Type': 'application/json' });
+      res.end(
+        JSON.stringify({
+          error: 'ORGANIZATION_FROZEN',
+          code: 'ORGANIZATION_FROZEN',
+          message: `Egress is blocked because organization '${orgId}' is frozen.`,
+        })
+      );
+      return;
+    }
+
+    if (policyManager.isAppSuspended(appKey)) {
+      logger.logEvent({
+        appKey,
+        method,
+        host: targetHost,
+        port: targetPort,
+        decision: 'denied',
+        reason: 'Capsule is suspended',
+      });
+      res.writeHead(403, { 'Content-Type': 'application/json' });
+      res.end(
+        JSON.stringify({
+          error: 'APP_SUSPENDED',
+          code: 'APP_SUSPENDED',
+          message: `Egress is blocked because capsule '${appKey}' is suspended.`,
+        })
+      );
+      return;
+    }
+
+
+    // 0.1 Daily Egress Quota Check
+    const estimatedBytes = (req.headers['content-length'] ? parseInt(req.headers['content-length'] as string, 10) : 0) + 1024;
+    const quotaCheck = policyManager.checkAndTrackEgress(appKey, estimatedBytes);
+    if (!quotaCheck.allowed) {
+      logger.logEvent({
+        appKey,
+        method,
+        host: targetHost,
+        port: targetPort,
+        decision: 'denied',
+        reason: 'Daily egress byte quota exceeded',
+      });
+      res.writeHead(403, { 'Content-Type': 'application/json' });
+      res.end(
+        JSON.stringify({
+          error: 'QUOTA_EXCEEDED',
+          code: 'QUOTA_EXCEEDED',
+          metric: 'egress_bytes_per_day',
+          limit_bytes: quotaCheck.limitBytes,
+          current_bytes: quotaCheck.currentBytes,
+          message: `Daily egress quota of ${Math.round(quotaCheck.limitBytes / (1024 * 1024))}MB exceeded for capsule '${appKey}'.`,
+        })
+      );
+      return;
+    }
 
     // 1. Policy Evaluation
     const policy = policyManager.getPolicy(appKey) || {
@@ -220,6 +367,61 @@ export function createEgressProxyServer(options: {
 
     if (!targetHost) {
       clientSocket.write('HTTP/1.1 400 Bad Request\r\n\r\n');
+      clientSocket.end();
+      return;
+    }
+
+    // 0. Kill Switch & Suspension Check
+    const orgId =
+      (req.headers['x-capsule-org-id'] as string) ||
+      policyManager.getPolicy(appKey)?.orgId;
+    if (orgId && policyManager.isOrgFrozen(orgId)) {
+      logger.logEvent({
+        appKey,
+        method,
+        host: targetHost,
+        port: targetPort,
+        decision: 'denied',
+        reason: 'Organization is frozen',
+      });
+      clientSocket.write(
+        'HTTP/1.1 403 Forbidden\r\nContent-Type: application/json\r\n\r\n{"error":"ORGANIZATION_FROZEN","code":"ORGANIZATION_FROZEN","message":"Egress blocked because organization is frozen."}'
+      );
+      clientSocket.end();
+      return;
+    }
+
+    if (policyManager.isAppSuspended(appKey)) {
+      logger.logEvent({
+        appKey,
+        method,
+        host: targetHost,
+        port: targetPort,
+        decision: 'denied',
+        reason: 'Capsule is suspended',
+      });
+      clientSocket.write(
+        'HTTP/1.1 403 Forbidden\r\nContent-Type: application/json\r\n\r\n{"error":"APP_SUSPENDED","code":"APP_SUSPENDED","message":"Egress blocked because capsule is suspended."}'
+      );
+      clientSocket.end();
+      return;
+    }
+
+
+    // 0.1 Daily Quota Check
+    const quotaCheck = policyManager.checkAndTrackEgress(appKey, 4096);
+    if (!quotaCheck.allowed) {
+      logger.logEvent({
+        appKey,
+        method,
+        host: targetHost,
+        port: targetPort,
+        decision: 'denied',
+        reason: 'Daily egress byte quota exceeded',
+      });
+      clientSocket.write(
+        `HTTP/1.1 403 Forbidden\r\nContent-Type: application/json\r\n\r\n{"error":"QUOTA_EXCEEDED","code":"QUOTA_EXCEEDED","metric":"egress_bytes_per_day","limit_bytes":${quotaCheck.limitBytes},"current_bytes":${quotaCheck.currentBytes}}`
+      );
       clientSocket.end();
       return;
     }

@@ -16,11 +16,20 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, s
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.session import get_db_session
-from db.dal import AppDAL, AppVersionDAL, AuditDAL, CapabilityApprovalDAL, UserDAL
+from db.dal import (
+    AppDAL, AppVersionDAL, AuditDAL, CapabilityApprovalDAL, UserDAL, OrganizationDAL, AppShareDAL
+)
 from auth.dependencies import get_current_user
 from auth.models import AuthenticatedUser
 from manifest.validator import validate_manifest
 from storage import get_storage_driver
+from services.quota_service import enforce_apps_per_user_quota, enforce_manifest_quotas
+from services.policy_engine import (
+    get_effective_profile,
+    validate_against_profile,
+    compute_effective_policy,
+    evaluate_conditional_approval,
+)
 from .schemas import (
     AppResponse,
     AppListResponse,
@@ -355,7 +364,37 @@ async def create_app(
             },
         )
 
-    # 4. Create app
+    # 4. Enforce Organization Quotas & Policy Ceiling
+    org_dal = OrganizationDAL(db)
+    org = await org_dal.get_by_id(user.organization_id)
+    env_profile = org.environment_profile if org else None
+    effective_profile = get_effective_profile(env_profile)
+
+    # Policy Ceiling Check (FR-027, FR-028)
+    violations = validate_against_profile(request.manifest, effective_profile)
+    if violations:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={
+                "code": "POLICY_VIOLATION",
+                "message": f"Manifest violates organization environment profile: {violations[0]['message']}",
+                "violations": violations,
+                "error": violations[0]["error"],
+                "field": violations[0]["field"],
+                "rule": violations[0]["rule"],
+                "hint": violations[0]["hint"],
+            },
+        )
+
+    # Quota A: apps_per_user
+    active_apps_count = await app_dal.count_active_apps_for_user(user.id, user.organization_id)
+    enforce_apps_per_user_quota(active_apps_count, env_profile)
+
+    # Quota B: manifest resource quotas (SQLite, blob, timeout, AI budget)
+    enforce_manifest_quotas(request.manifest, env_profile)
+
+
+    # 5. Create app
     app = await app_dal.create(
         app_key=request.id,
         name=request.name,
@@ -636,18 +675,73 @@ async def publish_app(
             detail=val_result,
         )
 
-    # 7. Check for Capability Escalation on Update
+    # 6.1 Check Suspension
+    org_dal = OrganizationDAL(db)
+    org = await org_dal.get_by_id(app.organization_id)
+    if org and org.status == "suspended":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={
+                "code": "ORGANIZATION_SUSPENDED",
+                "message": f"Cannot publish to capsule '{app.app_key}'. Organization '{org.slug}' is suspended.",
+            },
+        )
+
+    if app.status == "suspended":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={
+                "code": "APP_SUSPENDED",
+                "message": f"Cannot publish to suspended capsule '{app.app_key}'. It must be resumed by an admin first.",
+            },
+        )
+
+    # 6.2 Enforce Policy Ceiling & Resource Quotas
+    effective_manifest = val_result.get("effective_manifest") or manifest
+    env_profile = org.environment_profile if org else None
+    effective_profile = get_effective_profile(env_profile)
+
+    violations = validate_against_profile(effective_manifest, effective_profile)
+    if violations:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={
+                "code": "POLICY_VIOLATION",
+                "message": f"Manifest violates organization environment profile: {violations[0]['message']}",
+                "violations": violations,
+                "error": violations[0]["error"],
+                "field": violations[0]["field"],
+                "rule": violations[0]["rule"],
+                "hint": violations[0]["hint"],
+            },
+        )
+
+    enforce_manifest_quotas(manifest, env_profile)
+
+    # 7. Check for Capability Escalation & Conditional Approval (FR-032)
     approval_dal = CapabilityApprovalDAL(db)
+    share_dal = AppShareDAL(db)
     current_version = None
     if app.current_version_id:
         current_version = await version_dal.get_by_id(app.current_version_id)
 
     old_manifest = current_version.manifest if current_version else (app.manifest or {})
-    effective_manifest = val_result.get("effective_manifest") or manifest
 
     escalations = []
     if current_version:
         escalations = detect_capability_escalation(old_manifest, effective_manifest)
+
+    # Check audience size
+    app_shares = await share_dal.list_shares_for_app(app.id, include_revoked=False)
+    audience_count = len(app_shares)
+
+    requires_approval, approval_reasons = evaluate_conditional_approval(
+        manifest=effective_manifest,
+        profile=effective_profile,
+        is_initial_publish=(current_version is None),
+        audience_count=audience_count,
+        escalations=escalations,
+    )
 
     # 8. Create App Version and Pre-Deploy Database Snapshot
     versions = await version_dal.list_for_app(app.id)
@@ -660,8 +754,8 @@ async def publish_app(
     now_utc = datetime.utcnow()
     operation_id = uuid.uuid4()
 
-    if escalations:
-        # Escalation detected: create version in 'validated' status (held from publishing)
+    if requires_approval:
+        # Held in 'validated' status (held from publishing)
         version = await version_dal.create(
             app_id=app.id,
             version_number=next_ver_num,
@@ -677,7 +771,11 @@ async def publish_app(
         )
 
         # Create CapabilityApproval records
-        for esc in escalations:
+        all_approval_items = escalations if escalations else [
+            {"capability_key": r, "previous_value": None, "requested_value": r, "reason": r}
+            for r in approval_reasons
+        ]
+        for esc in all_approval_items:
             await approval_dal.create(
                 app_id=app.id,
                 requested_version_id=version.id,
@@ -702,6 +800,7 @@ async def publish_app(
                 "operation_id": str(operation_id),
                 "version_number": next_ver_num,
                 "escalations": escalations,
+                "reasons": approval_reasons,
             },
         )
         await db.commit()
@@ -713,6 +812,8 @@ async def publish_app(
             app_id=app.id,
             version_id=version.id,
             errors=[
+                f"Approval required: {r}" for r in approval_reasons
+            ] if approval_reasons else [
                 f"Capability escalation detected: {e['reason']}. Approval required from app owner."
                 for e in escalations
             ],
@@ -1246,13 +1347,21 @@ async def approve_capability_escalation(
     SECURITY INVARIANT: An agent's publish credential can NEVER approve its own escalation.
     Only an authenticated Owner or Editor can approve.
     """
-    # 1. Reject Publish Token Callers (Self-Approval Prohibition)
+    # 1. Reject Publish Token and Agent Callers (Self-Approval Prohibition)
     if user.token_type == "publish_token":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail={
                 "code": "FORBIDDEN",
                 "message": "A publish credential can never approve its own capability escalation.",
+            },
+        )
+    if user.claims.get("is_agent") or user.claims.get("agent_name"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={
+                "code": "FORBIDDEN",
+                "message": "An agent's credential can never approve capability escalation.",
             },
         )
 
@@ -1432,5 +1541,52 @@ async def reject_capability_escalation(
         version_status="validated",
         version_number=version_number,
     )
+
+
+@router.get("/apps/{app_id}/effective-policy")
+async def get_app_effective_policy(
+    app_id: str,
+    user: AuthenticatedUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db_session),
+):
+    """
+    Compute and return the effective policy for an app (intersection of organization
+    profile ceiling and app manifest). Explains why any capability or limit was restricted.
+    """
+    app_dal = AppDAL(db)
+    org_dal = OrganizationDAL(db)
+
+    app = await app_dal.get_by_id_or_key(user.organization_id, app_id)
+    if not app:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"code": "APP_NOT_FOUND", "message": f"App '{app_id}' not found."},
+        )
+
+    org = await org_dal.get_by_id(user.organization_id)
+    raw_profile = org.environment_profile if org else None
+    effective_profile = get_effective_profile(raw_profile)
+
+    manifest = app.manifest or {}
+    effective_policy = compute_effective_policy(effective_profile, manifest)
+    violations = validate_against_profile(manifest, effective_profile)
+
+    compliance = manifest.get("_compliance") or {
+        "compliance_status": "compliant" if not violations else "non_compliant",
+        "violations": violations,
+    }
+
+    return {
+        "app_id": str(app.id),
+        "app_key": app.app_key,
+        "organization_id": str(user.organization_id),
+        "profile_version": effective_profile.get("version", "capsule/v1alpha1"),
+        "is_compliant": len(violations) == 0,
+        "compliance": compliance,
+        "violations": violations,
+        "effective_policy": effective_policy,
+        "manifest_policy": manifest,
+        "profile_ceiling": effective_profile,
+    }
 
 

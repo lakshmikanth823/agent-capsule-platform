@@ -60,4 +60,17 @@ class MockOIDCProvider(OIDCProvider):
                 "exp": int(time.time()) + 3600,
             }
 
+        # Check if token is signed dev mock JWT
+        try:
+            import jwt
+            payload = jwt.decode(
+                token,
+                "control-plane-dev-jwt-secret-do-not-use-in-prod",
+                algorithms=["HS256"],
+            )
+            if payload.get("iss") in ["mock", "mock:oidc"]:
+                return payload
+        except Exception:
+            pass
+
         raise AuthenticationError("Invalid mock token.")

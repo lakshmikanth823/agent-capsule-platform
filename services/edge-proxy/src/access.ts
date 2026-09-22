@@ -13,6 +13,7 @@ export interface AppMetadata {
   name: string;
   organizationId: string;
   status: string;
+  orgStatus?: string;
   currentVersionId?: string;
   manifest: Record<string, any>;
   bundlePath?: string;
@@ -124,6 +125,14 @@ export class AccessManager {
   }
 
   evaluateAccess(user: UserContext, app: AppMetadata): AccessEvaluation {
+    // 0. Organization must be active
+    if (app.orgStatus === 'suspended') {
+      return {
+        allowed: false,
+        reason: 'Organization is suspended.',
+      };
+    }
+
     // 1. App must be active
     if (app.status !== 'active') {
       return {

@@ -109,6 +109,9 @@ async def seed_database():
                 },
             )
             print(f"  + Created app: {app.name} ({app.id})")
+        else:
+            app.owner_user_id = alice.id
+            await session.commit()
 
         # 4. App Version: Version 1 with baseline SQLite snapshot reference
         versions = await version_dal.list_for_app(app.id)

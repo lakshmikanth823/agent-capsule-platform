@@ -19,6 +19,36 @@ import type {
   ForwardResponse,
   SandboxLimits,
 } from './interface.js';
+import { DockerDevDriver } from './drivers/docker.js';
+import { GVisorDriver, type GVisorDriverOptions } from './drivers/gvisor.js';
+import { MockSandboxDriver } from './drivers/mock.js';
+
+export interface DriverFactoryOptions {
+  driverType?: 'gvisor' | 'docker' | 'mock';
+  gvisorOptions?: GVisorDriverOptions;
+}
+
+/**
+ * Factory creating the appropriate SandboxDriver based on environment and configuration.
+ * Automatically selects GVisorDriver in production mode.
+ */
+export function createDefaultSandboxDriver(options: DriverFactoryOptions = {}): SandboxDriver {
+  const driverType =
+    options.driverType ||
+    process.env.SANDBOX_DRIVER ||
+    (process.env.NODE_ENV === 'production' ? 'gvisor' : 'docker');
+
+  if (driverType === 'gvisor') {
+    return new GVisorDriver(options.gvisorOptions);
+  }
+
+  if (driverType === 'mock') {
+    return new MockSandboxDriver();
+  }
+
+  // Fall back to DockerDevDriver (which contains the production startup guard)
+  return new DockerDevDriver();
+}
 
 export interface LifecycleConfig {
   driver: SandboxDriver;
@@ -58,6 +88,7 @@ export class CapsuleLifecycleManager {
     capsuleId: string;
     versionId: string;
     appKey: string;
+    orgId?: string;
     bundlePath: string;
     manifest?: Record<string, any>;
     customDataDir?: string;
@@ -124,6 +155,7 @@ export class CapsuleLifecycleManager {
       capsuleId: params.capsuleId,
       versionId: params.versionId,
       appKey: params.appKey,
+      orgId: params.orgId,
       bundlePath: path.resolve(params.bundlePath),
       dataDir: effectiveDataDir,
       manifest: params.manifest,
@@ -135,6 +167,7 @@ export class CapsuleLifecycleManager {
 
     return spec;
   }
+
 
   /**
    * Start a capsule on demand.
@@ -232,6 +265,38 @@ export class CapsuleLifecycleManager {
     instance.status = 'running';
     instance.lastActiveAt = new Date();
   }
+
+  /**
+   * Suspend all running sandboxes belonging to an organization.
+   */
+  async suspendOrg(orgId: string): Promise<string[]> {
+    const suspendedIds: string[] = [];
+    for (const [_, instance] of this.instances.entries()) {
+      if (instance.spec.orgId === orgId && instance.status === 'running') {
+        await this.driver.suspend(instance.id);
+        instance.status = 'suspended';
+        suspendedIds.push(instance.id);
+      }
+    }
+    return suspendedIds;
+  }
+
+  /**
+   * Resume all suspended sandboxes belonging to an organization.
+   */
+  async resumeOrg(orgId: string): Promise<string[]> {
+    const resumedIds: string[] = [];
+    for (const [_, instance] of this.instances.entries()) {
+      if (instance.spec.orgId === orgId && instance.status === 'suspended') {
+        await this.driver.resume(instance.id);
+        instance.status = 'running';
+        instance.lastActiveAt = new Date();
+        resumedIds.push(instance.id);
+      }
+    }
+    return resumedIds;
+  }
+
 
   /**
    * Recover a capsule if it has crashed.

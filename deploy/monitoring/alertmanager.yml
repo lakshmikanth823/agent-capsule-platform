@@ -1,0 +1,52 @@
+global:
+  resolve_timeout: 5m
+  smtp_from: alerts@example.com
+  smtp_smarthost: email-smtp.us-east-1.amazonaws.com:587
+  smtp_auth_username: ${SES_SMTP_USERNAME}
+  smtp_auth_password: ${SES_SMTP_PASSWORD}
+
+route:
+  group_by: ['alertname', 'environment']
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 12h
+  receiver: default
+
+  routes:
+    # Critical alerts — page immediately
+    - match:
+        severity: critical
+      receiver: pagerduty-critical
+      repeat_interval: 1h
+
+    # Security alerts — always go to security team
+    - match:
+        team: security
+      receiver: security-team
+      repeat_interval: 4h
+
+receivers:
+  - name: default
+    email_configs:
+      - to: ops@example.com
+        send_resolved: true
+        headers:
+          Subject: '[{{ .Status | toUpper }}] {{ .GroupLabels.alertname }} — Capsule Platform'
+
+  - name: pagerduty-critical
+    pagerduty_configs:
+      - routing_key: ${PAGERDUTY_ROUTING_KEY}
+        description: '{{ range .Alerts }}{{ .Annotations.description }}{{ end }}'
+        severity: critical
+
+  - name: security-team
+    email_configs:
+      - to: security@example.com
+        send_resolved: true
+
+inhibit_rules:
+  - source_match:
+      severity: critical
+    target_match:
+      severity: warning
+    equal: ['alertname', 'environment']

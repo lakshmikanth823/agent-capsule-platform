@@ -17,8 +17,11 @@ import {
   Database,
   Globe,
   Layers,
-  ShieldAlert
+  ShieldAlert,
+  Power,
+  AlertTriangle
 } from 'lucide-react';
+
 
 interface AppDetailScreenProps {
   appId: string;
@@ -41,6 +44,10 @@ export const AppDetailScreen: React.FC<AppDetailScreenProps> = ({
   const [logTail, setLogTail] = useState(100);
   const [logFilter, setLogFilter] = useState('');
   const [autoRefresh, setAutoRefresh] = useState(true);
+  const [showSuspendModal, setShowSuspendModal] = useState(false);
+  const [suspendReason, setSuspendReason] = useState('');
+  const [suspendActionLoading, setSuspendActionLoading] = useState(false);
+  const [suspendError, setSuspendError] = useState<string | null>(null);
 
   useEffect(() => {
     loadApp();
@@ -93,6 +100,35 @@ export const AppDetailScreen: React.FC<AppDetailScreenProps> = ({
     }
   };
 
+  const handleSuspend = async () => {
+    if (!suspendReason.trim()) return;
+    try {
+      setSuspendActionLoading(true);
+      setSuspendError(null);
+      await api.suspendApp(app.id, suspendReason.trim());
+      setShowSuspendModal(false);
+      setSuspendReason('');
+      await loadApp();
+    } catch (err: any) {
+      setSuspendError(err.message || 'Failed to suspend capsule');
+    } finally {
+      setSuspendActionLoading(false);
+    }
+  };
+
+  const handleResume = async () => {
+    try {
+      setSuspendActionLoading(true);
+      await api.resumeApp(app.id);
+      await loadApp();
+    } catch (err: any) {
+      alert(err.message || 'Failed to resume capsule');
+    } finally {
+      setSuspendActionLoading(false);
+    }
+  };
+
+
   if (loading || !app) {
     return (
       <div className="py-20 text-center text-sm text-slate-400">
@@ -127,6 +163,8 @@ export const AppDetailScreen: React.FC<AppDetailScreenProps> = ({
                 className={`px-3 py-0.5 rounded-full text-xs font-bold uppercase tracking-wider ${
                   isActive
                     ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
+                    : app.status === 'suspended'
+                    ? 'bg-rose-100 text-rose-800 border border-rose-200'
                     : 'bg-amber-100 text-amber-800 border border-amber-200'
                 }`}
               >
@@ -150,16 +188,44 @@ export const AppDetailScreen: React.FC<AppDetailScreenProps> = ({
               Share
             </button>
 
+            {isActive ? (
+              <button
+                onClick={() => {
+                  setSuspendReason('');
+                  setSuspendError(null);
+                  setShowSuspendModal(true);
+                }}
+                className="px-4 py-2 text-xs font-semibold rounded-lg border border-rose-200 bg-rose-50 hover:bg-rose-100 text-rose-700 flex items-center gap-2 shadow-sm transition-colors"
+              >
+                <Power className="w-4 h-4 text-rose-600" />
+                Suspend Capsule
+              </button>
+            ) : (
+              <button
+                onClick={handleResume}
+                disabled={suspendActionLoading}
+                className="px-4 py-2 text-xs font-semibold rounded-lg border border-emerald-300 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 flex items-center gap-2 shadow-sm transition-colors disabled:opacity-50"
+              >
+                <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                {suspendActionLoading ? 'Resuming...' : 'Resume Capsule'}
+              </button>
+            )}
+
             <a
               href={appUrl}
               target="_blank"
               rel="noreferrer"
-              className="px-4 py-2 text-xs font-semibold rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white flex items-center gap-2 shadow-sm transition-colors"
+              className={`px-4 py-2 text-xs font-semibold rounded-lg flex items-center gap-2 shadow-sm transition-colors ${
+                isActive
+                  ? 'bg-indigo-600 hover:bg-indigo-700 text-white'
+                  : 'bg-slate-200 text-slate-400 pointer-events-none'
+              }`}
             >
               <ExternalLink className="w-4 h-4" />
               Open App
             </a>
           </div>
+
         </div>
 
         {/* URL Box with Copy Button */}
@@ -455,6 +521,65 @@ export const AppDetailScreen: React.FC<AppDetailScreenProps> = ({
           onShareUpdated={loadApp}
         />
       )}
+
+      {/* Suspend Confirmation Modal */}
+      {showSuspendModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+          <div className="bg-white border border-slate-200 rounded-2xl max-w-md w-full p-6 shadow-xl space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-rose-100 flex items-center justify-center text-rose-600">
+                <AlertTriangle className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-slate-900">Suspend Capsule</h3>
+                <p className="text-xs text-slate-500">Immediate emergency kill switch</p>
+              </div>
+            </div>
+
+            <p className="text-xs text-slate-600 leading-relaxed">
+              Suspending this capsule will immediately stop all running sandboxes, terminate requests in flight within 5 seconds, and block incoming traffic with a 503 Suspended page.
+            </p>
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-slate-700 block">
+                Reason for suspension <span className="text-rose-500">*</span>
+              </label>
+              <textarea
+                value={suspendReason}
+                onChange={(e) => setSuspendReason(e.target.value)}
+                placeholder="Describe reason (e.g. security breach, anomalous egress, policy violation)..."
+                rows={3}
+                className="w-full text-xs p-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-rose-500 focus:border-rose-500 resize-none font-sans"
+              />
+            </div>
+
+            {suspendError && (
+              <div className="p-3 bg-rose-50 border border-rose-200 rounded-lg text-xs text-rose-700">
+                {suspendError}
+              </div>
+            )}
+
+            <div className="flex items-center justify-end gap-3 pt-2">
+              <button
+                onClick={() => setShowSuspendModal(false)}
+                disabled={suspendActionLoading}
+                className="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSuspend}
+                disabled={!suspendReason.trim() || suspendActionLoading}
+                className="px-4 py-2 text-xs font-semibold text-white bg-rose-600 hover:bg-rose-700 disabled:opacity-50 disabled:hover:bg-rose-600 rounded-lg shadow-sm transition-colors flex items-center gap-2"
+              >
+                <Power className="w-3.5 h-3.5" />
+                {suspendActionLoading ? 'Suspending...' : 'Confirm Suspension'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
+
 };

@@ -48,6 +48,22 @@ describe('Capsule SDK Connectors Suite (Prompt 15)', () => {
       expect(result.echo_text).toBe('Alice submitted leave request');
     });
 
+    it('should emulate sheets.read connector locally with mock sheet rows', async () => {
+      const result = await sdk.connector('sheets.read').invoke({
+        spreadsheet_id: 'sheet-leave-balances',
+        range: 'A1:C10',
+      });
+
+      expect(result.connector).toBe('sheets.read');
+      expect(result.status).toBe('success');
+      expect(result.spreadsheet_id).toBe('sheet-leave-balances');
+      expect(result.range).toBe('A1:C10');
+      expect(result.major_dimension).toBe('ROWS');
+      expect(result.values).toBeInstanceOf(Array);
+      expect(result.values.length).toBeGreaterThan(0);
+      expect(result.emulator).toBe(true);
+    });
+
     it('should verify apps have NO raw secrets in process.env', () => {
       // Invariant: no raw connector credentials in application env
       expect(process.env.SLACK_BOT_TOKEN).toBeUndefined();
@@ -97,6 +113,32 @@ describe('Capsule SDK Connectors Suite (Prompt 15)', () => {
                 credential_attached: true,
               })
             );
+          } else if (req.url === '/v1/connectors/sheets.read/invoke') {
+            if (!req.headers['x-capsule-identity']) {
+              res.writeHead(401, { 'Content-Type': 'application/json' });
+              res.end(
+                JSON.stringify({
+                  code: 'VIEWER_IDENTITY_REQUIRED',
+                  message: 'Viewer identity required for sheets.read',
+                })
+              );
+              return;
+            }
+
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(
+              JSON.stringify({
+                connector: 'sheets.read',
+                status: 'success',
+                spreadsheet_id: lastReceivedRequest.body?.spreadsheet_id,
+                range: lastReceivedRequest.body?.range || 'A1:Z100',
+                major_dimension: 'ROWS',
+                values: [
+                  ['Name', 'Hours'],
+                  ['Alice', 40],
+                ],
+              })
+            );
           } else if (req.url === '/v1/connectors/forbidden.service/invoke') {
             res.writeHead(403, { 'Content-Type': 'application/json' });
             res.end(
@@ -139,6 +181,22 @@ describe('Capsule SDK Connectors Suite (Prompt 15)', () => {
       expect(lastReceivedRequest.headers['x-capsule-key']).toBe('leave-tracker');
       expect(lastReceivedRequest.headers['x-capsule-identity']).toBe('mock-viewer-token');
       expect(lastReceivedRequest.body.message).toBe('platform test');
+    });
+
+    it('should invoke sheets.read with viewer identity in platform mode', async () => {
+      const result = await sdk.connector('sheets.read').invoke(
+        { spreadsheet_id: 'sheet-q3-okr', range: 'Sheet1!A1:B5' },
+        { identityHeader: 'mock-viewer-token' }
+      );
+
+      expect(result.connector).toBe('sheets.read');
+      expect(result.status).toBe('success');
+      expect(result.spreadsheet_id).toBe('sheet-q3-okr');
+      expect(result.values).toEqual([
+        ['Name', 'Hours'],
+        ['Alice', 40],
+      ]);
+      expect(lastReceivedRequest.headers['x-capsule-identity']).toBe('mock-viewer-token');
     });
 
     it('should throw typed ConnectorError on broker rejection (e.g. VIEWER_IDENTITY_REQUIRED)', async () => {

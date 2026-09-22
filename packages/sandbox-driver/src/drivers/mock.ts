@@ -130,3 +130,7 @@ export class DevMockSandboxDriver implements SandboxDriver {
     this.logsMap.delete(instanceId);
   }
 }
+
+export const MockSandboxDriver = DevMockSandboxDriver;
+export type MockSandboxDriver = DevMockSandboxDriver;
+

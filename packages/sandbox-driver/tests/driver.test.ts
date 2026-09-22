@@ -89,10 +89,10 @@ describe('Production Driver Stubs', () => {
     dataDir: '/tmp/data',
   };
 
-  it('GVisorDriver should throw NotImplementedError', async () => {
+  it('GVisorDriver is implemented for Phase 1 and enforces runsc availability', async () => {
     const driver = new GVisorDriver();
     expect(driver.name).toBe('gvisor');
-    await expect(driver.start(sampleSpec)).rejects.toThrow(NotImplementedError);
+    await expect(driver.start(sampleSpec)).rejects.toThrow(/gVisor runtime/);
   });
 
   it('FirecrackerDriver should throw NotImplementedError', async () => {

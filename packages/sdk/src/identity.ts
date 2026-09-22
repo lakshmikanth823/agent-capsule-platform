@@ -110,10 +110,8 @@ export function getIdentity(
 ): IdentityContext | null {
   const token = extractHeader(reqOrToken);
 
-  // Check for local emulator mode if no token is present
-  const isEmulator =
-    process.env.CAPSULE_EMULATOR === 'true' ||
-    process.env.NODE_ENV === 'development';
+  // Check for local emulator mode (strictly requires explicit CAPSULE_EMULATOR=true)
+  const isEmulator = process.env.CAPSULE_EMULATOR === 'true';
 
   if (!token) {
     if (isEmulator) {
@@ -128,8 +126,18 @@ export function getIdentity(
     return null;
   }
 
-  // Support raw JSON identity header for backward-compatibility with tests/mock callers
+  // In strict production mode, raw unsigned JSON headers are rejected.
+  // In dev/test environments, raw JSON is permitted for backward-compatibility with Prompt 01 curl flows.
   if (token.trim().startsWith('{')) {
+    if (process.env.STRICT_IDENTITY === 'true') {
+      if (options.throwOnError) {
+        throw new IdentityVerificationError(
+          'Unsigned identity header rejected in strict production mode: a valid signed JWT is required.',
+          'UNSIGNED_IDENTITY_REJECTED'
+        );
+      }
+      return null;
+    }
     try {
       const parsed = JSON.parse(token);
       if (parsed && typeof parsed === 'object' && (parsed.sub || parsed.userId)) {

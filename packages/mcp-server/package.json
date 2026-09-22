@@ -1,0 +1,28 @@
+{
+  "name": "@capsule/mcp-server",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Model Context Protocol (MCP) server adapter for the Software Capsule Platform",
+  "bin": {
+    "capsule-mcp": "./dist/cli.js"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@capsule/manifest-schema": "*",
+    "capsule": "*",
+    "@modelcontextprotocol/sdk": "^1.30.0",
+    "zod": "^3.24.0",
+    "yaml": "^2.4.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.5.0",
+    "vitest": "^2.0.0"
+  }
+}

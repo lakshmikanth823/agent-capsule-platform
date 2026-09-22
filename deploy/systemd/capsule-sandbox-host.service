@@ -1,0 +1,26 @@
+[Unit]
+Description=Capsule Platform — Sandbox Host Services (Builder + Egress Proxy)
+Documentation=https://github.com/your-org/capsule-platform/blob/main/docs/RUNBOOK.md
+After=network-online.target docker.service
+Wants=network-online.target
+Requires=docker.service
+
+[Service]
+Type=simple
+Restart=always
+RestartSec=10
+
+WorkingDirectory=/opt/capsule
+
+EnvironmentFile=/opt/capsule/env.conf
+
+ExecStartPre=/usr/bin/docker compose -f /opt/capsule/deploy/compose/docker-compose.sandbox-host.yml pull
+ExecStart=/usr/bin/docker compose -f /opt/capsule/deploy/compose/docker-compose.sandbox-host.yml up --remove-orphans
+ExecStop=/usr/bin/docker compose -f /opt/capsule/deploy/compose/docker-compose.sandbox-host.yml down --timeout 30
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=capsule-sandbox-host
+
+[Install]
+WantedBy=multi-user.target

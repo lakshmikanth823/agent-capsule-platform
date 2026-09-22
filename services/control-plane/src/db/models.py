@@ -8,7 +8,7 @@ from datetime import datetime
 from typing import Optional, Dict, Any, List
 
 from sqlalchemy import (
-    String, Text, Boolean, Integer, DateTime, ForeignKey,
+    String, Text, Boolean, Integer, BigInteger, Float, Numeric, DateTime, ForeignKey,
     CheckConstraint, UniqueConstraint, Index, func, text
 )
 from sqlalchemy.dialects.postgresql import UUID, JSONB, INET
@@ -33,6 +33,16 @@ class Organization(Base):
     environment_profile: Mapped[Dict[str, Any]] = mapped_column(
         JSONB, nullable=False, server_default=text("'{}'::jsonb")
     )
+    audit_retention_days: Mapped[int] = mapped_column(
+        Integer, nullable=False, server_default="90"
+    )
+    tokens_revoked_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    sessions_revoked_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    suspended_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    suspended_by_user_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True), nullable=True
+    )
+    suspension_reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
@@ -42,6 +52,8 @@ class Organization(Base):
 
     members: Mapped[List[OrganizationMember]] = relationship("OrganizationMember", back_populates="organization", cascade="all, delete-orphan")
     apps: Mapped[List[App]] = relationship("App", back_populates="organization")
+    audit_checkpoints: Mapped[List[OrganizationAuditCheckpoint]] = relationship("OrganizationAuditCheckpoint", back_populates="organization", cascade="all, delete-orphan")
+    audit_webhook: Mapped[Optional[OrganizationAuditWebhook]] = relationship("OrganizationAuditWebhook", back_populates="organization", uselist=False, cascade="all, delete-orphan")
 
     __table_args__ = (
         CheckConstraint("status IN ('active', 'suspended', 'deleting')", name="chk_organizations_status"),
@@ -62,6 +74,8 @@ class User(Base):
     status: Mapped[str] = mapped_column(
         String(20), nullable=False, server_default="active"
     )
+    tokens_revoked_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    sessions_revoked_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     last_login_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
@@ -71,7 +85,7 @@ class User(Base):
     )
 
     memberships: Mapped[List[OrganizationMember]] = relationship("OrganizationMember", back_populates="user", cascade="all, delete-orphan")
-    owned_apps: Mapped[List[App]] = relationship("App", back_populates="owner")
+    owned_apps: Mapped[List[App]] = relationship("App", back_populates="owner", foreign_keys="[App.owner_user_id]")
     shares: Mapped[List[AppShare]] = relationship("AppShare", back_populates="user", foreign_keys="AppShare.user_id", cascade="all, delete-orphan")
 
     __table_args__ = (
@@ -142,8 +156,29 @@ class App(Base):
     )
     published_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     archived_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    suspended_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    suspended_by_user_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True), nullable=True
+    )
+    suspension_reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     manifest: Mapped[Dict[str, Any]] = mapped_column(
         JSONB, nullable=False, server_default=text("'{}'::jsonb")
+    )
+    nominated_owner_user_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    last_activity_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    expires_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    inactivity_days_limit: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    governance_state: Mapped[str] = mapped_column(
+        String(30), nullable=False, server_default="normal"
+    )
+    governance_deadline: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    governance_warnings_sent: Mapped[List[Any]] = mapped_column(
+        JSONB, nullable=False, server_default=text("'[]'::jsonb")
+    )
+    purge_after_days: Mapped[int] = mapped_column(
+        Integer, nullable=False, server_default="30"
     )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
@@ -153,7 +188,8 @@ class App(Base):
     )
 
     organization: Mapped[Optional[Organization]] = relationship("Organization", back_populates="apps")
-    owner: Mapped[Optional[User]] = relationship("User", back_populates="owned_apps")
+    owner: Mapped[Optional[User]] = relationship("User", back_populates="owned_apps", foreign_keys=[owner_user_id])
+    nominated_owner: Mapped[Optional[User]] = relationship("User", foreign_keys=[nominated_owner_user_id])
     versions: Mapped[List[AppVersion]] = relationship(
         "AppVersion", back_populates="app", foreign_keys="AppVersion.app_id", cascade="all, delete-orphan"
     )
@@ -166,6 +202,9 @@ class App(Base):
         Index("idx_apps_org_status", "organization_id", "status"),
         Index("idx_apps_owner", "owner_user_id"),
         Index("idx_apps_updated", updated_at.desc()),
+        Index("idx_apps_governance", "governance_state", "governance_deadline"),
+        Index("idx_apps_last_activity", "last_activity_at"),
+        Index("idx_apps_nominee", "nominated_owner_user_id"),
     )
 
 
@@ -305,6 +344,11 @@ class AuditEvent(Base):
     metadata_: Mapped[Dict[str, Any]] = mapped_column(
         "metadata", JSONB, nullable=False, server_default=text("'{}'::jsonb")
     )
+    sequence_number: Mapped[int] = mapped_column(BigInteger, nullable=False, server_default="1")
+    prev_hash: Mapped[str] = mapped_column(
+        String(64), nullable=False, server_default="0000000000000000000000000000000000000000000000000000000000000000"
+    )
+    event_hash: Mapped[str] = mapped_column(String(64), nullable=False, server_default="")
     occurred_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
@@ -316,6 +360,7 @@ class AuditEvent(Base):
         Index("idx_audit_actor_time", "actor_user_id", occurred_at.desc()),
         Index("idx_audit_action_time", "action", occurred_at.desc()),
         Index("idx_audit_target", "target_type", "target_id"),
+        Index("idx_audit_org_seq", "organization_id", "sequence_number"),
     )
 
 
@@ -392,3 +437,291 @@ class ConnectorCredential(Base):
         Index("idx_connector_cred_lookup", "organization_id", "connector_name", "identity_type"),
         Index("idx_connector_cred_app", "app_id", postgresql_where=text("app_id IS NOT NULL")),
     )
+
+
+class OrganizationIdentityProvider(Base):
+    __tablename__ = "organization_idps"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()")
+    )
+    organization_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False
+    )
+    provider_type: Mapped[str] = mapped_column(String(20), nullable=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    enforce_sso: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    session_lifetime_seconds: Mapped[int] = mapped_column(Integer, nullable=False, default=28800)
+    oidc_issuer_url: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    oidc_client_id: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    oidc_client_secret_encrypted: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    oidc_discovery_url: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    oidc_scopes: Mapped[List[str]] = mapped_column(JSONB, nullable=False, server_default=text("'[\"openid\", \"email\", \"profile\"]'::jsonb"))
+    saml_entity_id: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    saml_sso_url: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    saml_slo_url: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    saml_x509_cert: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    saml_sp_entity_id: Mapped[Optional[str]] = mapped_column(Text, nullable=True, server_default="urn:capsule:sp")
+    saml_acs_url: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()
+    )
+
+    organization: Mapped[Organization] = relationship("Organization")
+
+    __table_args__ = (
+        CheckConstraint("provider_type IN ('oidc', 'saml')", name="chk_org_idp_type"),
+        UniqueConstraint("organization_id", "provider_type", name="uq_org_idp_type"),
+        Index("idx_org_idps_org", "organization_id"),
+    )
+
+
+class OrganizationVerifiedDomain(Base):
+    __tablename__ = "organization_verified_domains"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()")
+    )
+    organization_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False
+    )
+    domain: Mapped[str] = mapped_column(String(255), nullable=False, unique=True)
+    verification_token: Mapped[str] = mapped_column(String(128), nullable=False)
+    status: Mapped[str] = mapped_column(String(20), nullable=False, server_default="pending")
+    verified_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()
+    )
+
+    organization: Mapped[Organization] = relationship("Organization")
+
+    __table_args__ = (
+        CheckConstraint("status IN ('pending', 'verified', 'failed')", name="chk_org_domain_status"),
+        Index("idx_org_domains_org", "organization_id"),
+    )
+
+
+class SSOReplayCache(Base):
+    __tablename__ = "sso_replay_cache"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()")
+    )
+    assertion_id: Mapped[str] = mapped_column(String(255), nullable=False, unique=True)
+    organization_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False
+    )
+    received_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+    __table_args__ = (
+        Index("idx_sso_replay_exp", "expires_at"),
+    )
+
+
+class OrganizationSCIMToken(Base):
+    __tablename__ = "organization_scim_tokens"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()")
+    )
+    organization_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False
+    )
+    token_hash: Mapped[str] = mapped_column(String(128), nullable=False, unique=True)
+    token_prefix: Mapped[str] = mapped_column(String(16), nullable=False)
+    status: Mapped[str] = mapped_column(String(20), nullable=False, server_default="active")
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    expires_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    organization: Mapped[Organization] = relationship("Organization")
+
+    __table_args__ = (
+        CheckConstraint("status IN ('active', 'revoked')", name="chk_scim_token_status"),
+        Index("idx_scim_tokens_org", "organization_id"),
+    )
+
+
+class SCIMGroup(Base):
+    __tablename__ = "scim_groups"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()")
+    )
+    organization_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False
+    )
+    display_name: Mapped[str] = mapped_column(String(200), nullable=False)
+    external_id: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()
+    )
+
+    organization: Mapped[Organization] = relationship("Organization")
+    members: Mapped[List[SCIMGroupMember]] = relationship("SCIMGroupMember", back_populates="group", cascade="all, delete-orphan")
+    role_mappings: Mapped[List[SCIMGroupRoleMapping]] = relationship("SCIMGroupRoleMapping", back_populates="group", cascade="all, delete-orphan")
+
+    __table_args__ = (
+        UniqueConstraint("organization_id", "display_name", name="uq_scim_group_name"),
+        Index("idx_scim_groups_org", "organization_id"),
+    )
+
+
+class SCIMGroupMember(Base):
+    __tablename__ = "scim_group_members"
+
+    group_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("scim_groups.id", ondelete="CASCADE"), primary_key=True
+    )
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    group: Mapped[SCIMGroup] = relationship("SCIMGroup", back_populates="members")
+    user: Mapped[User] = relationship("User")
+
+    __table_args__ = (
+        Index("idx_scim_group_members_user", "user_id"),
+    )
+
+
+class SCIMGroupRoleMapping(Base):
+    __tablename__ = "scim_group_role_mappings"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()")
+    )
+    organization_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False
+    )
+    group_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("scim_groups.id", ondelete="CASCADE"), nullable=False
+    )
+    app_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("apps.id", ondelete="CASCADE"), nullable=False
+    )
+    app_role: Mapped[str] = mapped_column(String(64), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    group: Mapped[SCIMGroup] = relationship("SCIMGroup", back_populates="role_mappings")
+    app: Mapped[App] = relationship("App")
+
+    __table_args__ = (
+        UniqueConstraint("group_id", "app_id", "app_role", name="uq_scim_group_role_mapping"),
+        Index("idx_group_role_mappings_org", "organization_id"),
+        Index("idx_group_role_mappings_group", "group_id"),
+    )
+
+
+class OrganizationAuditCheckpoint(Base):
+    __tablename__ = "organization_audit_checkpoints"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()")
+    )
+    organization_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False
+    )
+    checkpoint_sequence: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    checkpoint_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    purged_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    purged_before: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    organization: Mapped[Organization] = relationship("Organization", back_populates="audit_checkpoints")
+
+    __table_args__ = (
+        Index("idx_audit_checkpoints_org", "organization_id"),
+    )
+
+
+class OrganizationAuditWebhook(Base):
+    __tablename__ = "organization_audit_webhooks"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()")
+    )
+    organization_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False
+    )
+    url: Mapped[str] = mapped_column(String(1024), nullable=False)
+    secret_token_encrypted: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()
+    )
+
+    organization: Mapped[Organization] = relationship("Organization", back_populates="audit_webhook")
+
+    __table_args__ = (
+        UniqueConstraint("organization_id", name="uq_org_audit_webhook"),
+        Index("idx_audit_webhooks_org", "organization_id"),
+    )
+
+
+class AIUsageRecord(Base):
+    __tablename__ = "ai_usage_records"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()")
+    )
+    organization_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False
+    )
+    app_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("apps.id", ondelete="CASCADE"), nullable=False
+    )
+    user_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    model: Mapped[str] = mapped_column(String(80), nullable=False)
+    provider: Mapped[str] = mapped_column(String(40), nullable=False)
+    prompt_tokens: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    completion_tokens: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    total_tokens: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    estimated_cost_usd: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    duration_ms: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    status: Mapped[str] = mapped_column(String(30), nullable=False, default="success")
+    prompt_content: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    response_content: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    redacted: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    metadata_: Mapped[Dict[str, Any]] = mapped_column("metadata", JSONB, nullable=False, server_default=text("'{}'::jsonb"))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    organization: Mapped[Organization] = relationship("Organization")
+    app: Mapped[App] = relationship("App")
+    user: Mapped[Optional[User]] = relationship("User")
+
+    __table_args__ = (
+        Index("idx_ai_usage_org_created", "organization_id", "created_at"),
+        Index("idx_ai_usage_app_created", "app_id", "created_at"),
+        Index("idx_ai_usage_user_created", "user_id", "created_at"),
+        Index("idx_ai_usage_app_model", "app_id", "model"),
+    )
+
+

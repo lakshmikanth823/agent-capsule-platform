@@ -15,3 +15,6 @@ This document records all clarifications, architectural decisions, and requireme
 | 2026-09-21 | SQLite Library for SDK | Use `better-sqlite3` as the primary engine inside `@capsule/sdk` with WAL mode enabled. Wrap it in a clean `sdk.getDb()` abstraction with graceful fallback to `node:sqlite` if native compilation is unavailable. | `docs/TRD.md` Sec 7 & 14 |
 | 2026-09-21 | Object Storage Driver | Implement an abstract `StorageDriver` interface. Use `LocalStorageDriver` (storing files in `.capsule/storage/` under TRD-specified paths) by default for local Phase 0 development, and `S3StorageDriver` for MinIO/AWS S3. | `docs/TRD.md` Sec 14 & Table 42 |
 | 2026-09-21 | Monorepo Tooling & Package Manager | Use standard `npm` workspaces for TypeScript/Node.js packages (leveraging pre-installed Node.js 24 and npm 11). Use standard Python virtual environment (`venv` + `pip`) for the Python control plane. | `docs/TRD.md` Sec 42 |
+| 2026-09-21 | Production Sandbox Driver Spike (Prompt 21A) | Comprehensive evaluation of gVisor (`runsc`), Firecracker microVMs, and Managed Providers. **Approved by User: Option A (gVisor `runsc`)** for Phase 1 production sandbox driver behind `SandboxDriver` interface, with Firecracker reserved for Phase 2. Rejects managed providers. | `docs/SANDBOX_DECISION.md`, PRD Security Invariants 1 & 9 |
+
+

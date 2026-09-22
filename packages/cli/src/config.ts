@@ -35,10 +35,12 @@ function getConfigPath(): string {
 export function loadConfig(): CliConfig {
   const configPath = getConfigPath();
   const defaultApiUrl = process.env.CONTROL_PLANE_URL || 'http://localhost:8000';
+  const envToken = process.env.CAPSULE_TOKEN || process.env.CAPSULE_API_KEY;
 
   if (!fs.existsSync(configPath)) {
     return {
       apiUrl: defaultApiUrl,
+      token: envToken,
     };
   }
 
@@ -47,13 +49,14 @@ export function loadConfig(): CliConfig {
     const parsed = JSON.parse(raw);
     return {
       apiUrl: process.env.CONTROL_PLANE_URL || parsed.apiUrl || defaultApiUrl,
-      token: parsed.token,
+      token: envToken || parsed.token,
       user: parsed.user,
       org: parsed.org,
     };
   } catch {
     return {
       apiUrl: defaultApiUrl,
+      token: envToken,
     };
   }
 }

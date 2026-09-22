@@ -1,0 +1,90 @@
+# ==============================================================================
+# Capsule Platform — Control-Plane Host Compose File
+# Used on the dedicated control-plane EC2 instance.
+# All secrets are injected at runtime via entrypoint from AWS Secrets Manager.
+# NO hardcoded credentials, NO .env files in production.
+# ==============================================================================
+
+name: capsule-control-plane
+
+services:
+
+  # ── nginx edge proxy (TLS termination + routing) ─────────────────────────
+  nginx:
+    image: nginx:1.27-alpine
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./../../deploy/nginx/edge.conf:/etc/nginx/conf.d/capsule.conf:ro
+      - nginx_certs:/etc/nginx/certs:ro
+      - dashboard_static:/var/www/dashboard:ro
+    depends_on:
+      control-plane:
+        condition: service_healthy
+    logging:
+      driver: awslogs
+      options:
+        awslogs-group: /capsule/nginx
+        awslogs-region: "${AWS_REGION}"
+        awslogs-stream-prefix: nginx
+    networks:
+      - internal
+
+  # ── FastAPI control plane ─────────────────────────────────────────────────
+  control-plane:
+    image: "${ECR_REGISTRY}/capsule/control-plane:${IMAGE_TAG}"
+    restart: always
+    environment:
+      # These are NOT secrets — just config. Secrets are fetched by entrypoint.
+      AWS_REGION: "${AWS_REGION}"
+      AWS_SECRET_NAME: "${CP_SECRET_NAME}"
+      PLATFORM_ENV: production
+      NODE_ENV: production
+      STORAGE_DRIVER: s3
+      S3_BUCKET: "${S3_BUCKET}"
+      S3_REGION: "${AWS_REGION}"
+      APP_BASE_DOMAIN: "${APP_BASE_DOMAIN}"
+      DASHBOARD_URL: "https://${PLATFORM_DOMAIN}"
+      AUTH_PROVIDER: oidc
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/healthz"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    logging:
+      driver: awslogs
+      options:
+        awslogs-group: /capsule/control-plane
+        awslogs-region: "${AWS_REGION}"
+        awslogs-stream-prefix: cp
+    deploy:
+      resources:
+        limits:
+          cpus: "1.5"
+          memory: "1536M"
+    networks:
+      - internal
+
+  # ── Dashboard static file publisher ──────────────────────────────────────
+  # This is a one-shot init container that copies static files to the shared
+  # volume so nginx can serve them directly without a separate dashboard port.
+  dashboard-init:
+    image: "${ECR_REGISTRY}/capsule/dashboard:${IMAGE_TAG}"
+    restart: "no"
+    entrypoint: ["/bin/sh", "-c", "cp -r /usr/share/nginx/html/. /dashboard-out/"]
+    volumes:
+      - dashboard_static:/dashboard-out
+    networks: []
+
+volumes:
+  nginx_certs:
+    # Populated by the deploy.sh script which copies certs from Secrets Manager
+    external: false
+  dashboard_static:
+
+networks:
+  internal:
+    driver: bridge

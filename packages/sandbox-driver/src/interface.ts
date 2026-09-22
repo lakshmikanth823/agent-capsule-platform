@@ -23,6 +23,7 @@ export interface SandboxSpec {
   capsuleId: string;
   versionId: string;
   appKey: string;
+  orgId?: string;
   bundlePath: string;     // path to application bundle (tar.gz or extracted dir)
   dataDir: string;        // persistent per-capsule directory for SQLite
   manifest?: Record<string, any>;
@@ -30,6 +31,18 @@ export interface SandboxSpec {
   env?: Record<string, string>;
   networkMode?: 'none' | 'bridge'; // 'none' is the secure default
   port?: number;          // internal application port (default 3000)
+}
+
+
+export interface ColdStartStats {
+  count: number;
+  min: number;
+  max: number;
+  avg: number;
+  p50: number;
+  p90: number;
+  p95: number;
+  p99: number;
 }
 
 export interface SandboxInstance {
@@ -42,6 +55,7 @@ export interface SandboxInstance {
   createdAt: Date;
   startedAt?: Date;
   lastActiveAt: Date;
+  coldStartMs?: number;   // Measured time to become ready (ms)
 }
 
 export interface ForwardRequest {

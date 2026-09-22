@@ -14,6 +14,19 @@ import { statusCommand } from './commands/status.js';
 import { logsCommand } from './commands/logs.js';
 import { versionsCommand } from './commands/versions.js';
 import { rollbackCommand } from './commands/rollback.js';
+import { suspendCommand } from './commands/suspend.js';
+import { resumeCommand } from './commands/resume.js';
+import {
+  auditListCommand,
+  auditVerifyCommand,
+  auditExportCommand,
+  auditRetentionCommand,
+} from './commands/audit.js';
+import {
+  inventoryCommand,
+  transferOwnershipCommand,
+  setGovernanceCommand,
+} from './commands/inventory.js';
 
 export function createProgram(): Command {
   const program = new Command();
@@ -144,10 +157,110 @@ export function createProgram(): Command {
     .option('--json', 'Output machine-readable JSON')
     .action((opts) => rollbackCommand(opts));
 
+  // 12. suspend
+  program
+    .command('suspend [app]')
+    .description('Instantly suspend an application')
+    .option('--reason <msg>', 'Required reason for suspension')
+    .option('--app <appKey>', 'Target capsule ID or key')
+    .option('--json', 'Output machine-readable JSON')
+    .action((app, opts) => suspendCommand(app, opts));
+
+  // 13. resume
+  program
+    .command('resume [app]')
+    .description('Resume a suspended application')
+    .option('--app <appKey>', 'Target capsule ID or key')
+    .option('--json', 'Output machine-readable JSON')
+    .action((app, opts) => resumeCommand(app, opts));
+
+  // 14. audit command tree
+  const auditCmd = program
+    .command('audit')
+    .description('Inspect, verify, export, and manage tamper-evident audit logs');
+
+  auditCmd
+    .command('list')
+    .description('List audit events with filters')
+    .option('--app <appId>', 'Filter by capsule application ID')
+    .option('--action <action>', 'Filter by action name')
+    .option('--outcome <outcome>', 'Filter by outcome (success, denied, failed)')
+    .option('--agent-or-tool <val>', 'Filter by agent or tool')
+    .option('--limit <n>', 'Maximum records to return', '50')
+    .option('--json', 'Output machine-readable JSON')
+    .action((opts) => auditListCommand(opts));
+
+  auditCmd
+    .command('verify')
+    .description('Cryptographically verify hash chain continuity and tamper evidence')
+    .option('--json', 'Output machine-readable JSON')
+    .action((opts) => auditVerifyCommand(opts));
+
+  auditCmd
+    .command('export')
+    .description('Export audit logs in CSV or JSON format')
+    .option('--format <format>', 'Export format (csv or json)', 'json')
+    .option('--output <path>', 'Output file path (default: stdout)')
+    .option('--app <appId>', 'Filter by capsule application ID')
+    .option('--action <action>', 'Filter by action name')
+    .option('--outcome <outcome>', 'Filter by outcome')
+    .option('--json', 'Output machine-readable JSON')
+    .action((opts) => auditExportCommand(opts));
+
+  auditCmd
+    .command('retention')
+    .description('Enforce organization audit retention policy')
+    .option('--enforce', 'Execute retention policy and prune expired records')
+    .option('--json', 'Output machine-readable JSON')
+    .action((opts) => auditRetentionCommand(opts));
+
+  // 15. inventory
+  program
+    .command('inventory')
+    .description('List and inspect application inventory across your organization (FR-036)')
+    .option('--org <orgId>', 'Filter by organization ID')
+    .option('--status <status>', 'Filter by application status (active, suspended, archived)')
+    .option('--format <format>', 'Output format (table, csv, json)', 'table')
+    .option('--json', 'Output machine-readable JSON')
+    .action((opts) => inventoryCommand(opts));
+
+  // 16. transfer-ownership
+  program
+    .command('transfer-ownership <appKey>')
+    .description('Transfer application ownership to another user (FR-033)')
+    .requiredOption('--new-owner <userId>', 'Target new owner user ID')
+    .option('--reason <msg>', 'Reason for ownership transfer')
+    .option('--json', 'Output machine-readable JSON')
+    .action((appKey, opts) => transferOwnershipCommand(appKey, opts));
+
+  // 17. set-governance
+  program
+    .command('set-governance <appKey>')
+    .description('Configure governance lifecycle parameters for a capsule (FR-034/35)')
+    .option('--nominee <userId>', 'Nominated backup owner user ID')
+    .option('--expires-in <days>', 'Set expiry relative to now in days')
+    .option('--inactivity-limit <days>', 'Inactivity limit in days')
+    .option('--purge-days <days>', 'Retention window in days between archival and purge')
+    .option('--json', 'Output machine-readable JSON')
+    .action((appKey, opts) => setGovernanceCommand(appKey, opts));
+
   return program;
 }
+
 
 export function runCli(argv: string[]) {
   const program = createProgram();
   program.parse(argv);
 }
+
+export { ApiClient, type RequestOptions } from './client.js';
+export { loadConfig, saveConfig, clearConfig, type CliConfig } from './config.js';
+export { CliError, outputError, outputResult } from './errors.js';
+export { validateCommand } from './commands/validate.js';
+export { publishCommand } from './commands/publish.js';
+export { shareAddCommand, shareListCommand, shareRevokeCommand } from './commands/share.js';
+export { unshareCommand } from './commands/unshare.js';
+export { statusCommand } from './commands/status.js';
+export { logsCommand } from './commands/logs.js';
+export { versionsCommand } from './commands/versions.js';
+export { rollbackCommand } from './commands/rollback.js';

@@ -32,7 +32,9 @@ import {
   FileStorageError,
 } from '../../packages/sdk/src/index.js';
 import { DockerDevDriver } from '../../packages/sandbox-driver/src/drivers/docker.js';
+import { GVisorDriver } from '../../packages/sandbox-driver/src/drivers/gvisor.js';
 import { MockSandboxDriver } from '../../packages/sandbox-driver/src/drivers/mock.js';
+import { createDefaultSandboxDriver } from '../../packages/sandbox-driver/src/lifecycle.js';
 
 describe('Red-Team Security Test Suite (Prompt 16)', () => {
   const TEST_DIR = path.resolve(process.cwd(), '.capsule-redteam-test');
@@ -249,11 +251,6 @@ describe('Red-Team Security Test Suite (Prompt 16)', () => {
   // =========================================================================
   describe('6. Sandbox Escape Defenses', () => {
     it('should verify read-only root filesystem flag in Docker driver (--read-only)', () => {
-      // In DockerDevDriver:
-      // '--read-only' is passed in dockerArgs
-      // Non-root user: '--user', '1000:1000'
-      // Dropped capabilities: '--cap-drop=ALL'
-      // No privilege escalation: '--security-opt', 'no-new-privileges:true'
       const driver = new DockerDevDriver();
       expect(driver.name).toBe('docker-dev-driver');
     });
@@ -263,6 +260,84 @@ describe('Red-Team Security Test Suite (Prompt 16)', () => {
       // Docker driver sets '--pids-limit', '64'
       // Any attempt to spawn > 64 processes is blocked by Linux cgroup pids controller with EAGAIN
       expect(driver).toBeDefined();
+    });
+
+    it('should enforce user-space kernel isolation with GVisorDriver (Option A runsc)', async () => {
+      const gvDriver = new GVisorDriver();
+      expect(gvDriver.name).toBe('gvisor');
+
+      const sampleSpec = {
+        capsuleId: 'redteam-escape-test',
+        versionId: 'v1',
+        appKey: 'redteam-escape-test',
+        bundlePath: TEST_DIR,
+        dataDir: path.join(TEST_DIR, 'data'),
+        limits: { cpu: '0.5', memoryMb: 256, pidsLimit: 64, timeoutSeconds: 30 },
+        networkMode: 'none' as const,
+      };
+
+      const args = await gvDriver.buildExecutionArgs(sampleSpec, 'rt-escape-test');
+
+      // 1. gVisor Sentry user-space kernel runtime
+      expect(args).toContain('--runtime');
+      const rtIdx = args.indexOf('--runtime');
+      expect(args[rtIdx + 1]).toBe('runsc');
+      expect(args).toContain('--runtime-flag=--platform=ptrace');
+
+      // 2. Non-root user (UID 1000:1000)
+      const userIdx = args.indexOf('--user');
+      expect(userIdx).not.toBe(-1);
+      expect(args[userIdx + 1]).toBe('1000:1000');
+
+      // 3. Read-only root filesystem
+      expect(args).toContain('--read-only');
+
+      // 4. Dropped capabilities & prevent privilege escalation
+      expect(args).toContain('--cap-drop=ALL');
+      expect(args).toContain('no-new-privileges:true');
+
+      // 5. Default deny network isolation
+      expect(args).toContain('--network');
+      expect(args).toContain('none');
+      expect(args).toContain('--runtime-flag=--network=none');
+
+      // 6. Strict cgroups limits
+      expect(args).toContain('--cpus');
+      expect(args).toContain('0.5');
+      expect(args).toContain('--memory');
+      expect(args).toContain('256m');
+      expect(args).toContain('--pids-limit');
+      expect(args).toContain('64');
+    });
+
+    it('should refuse to run insecure DockerDevDriver in production environment without override', () => {
+      const origNodeEnv = process.env.NODE_ENV;
+      const origInsecure = process.env.ALLOW_INSECURE_DEV_DRIVER;
+      try {
+        process.env.NODE_ENV = 'production';
+        delete process.env.ALLOW_INSECURE_DEV_DRIVER;
+
+        expect(() => new DockerDevDriver()).toThrow(
+          /\[SECURITY INVARIANT VIOLATION\] DockerDevDriver is an insecure development driver and cannot be used in production/
+        );
+      } finally {
+        if (origNodeEnv !== undefined) process.env.NODE_ENV = origNodeEnv;
+        else delete process.env.NODE_ENV;
+        if (origInsecure !== undefined) process.env.ALLOW_INSECURE_DEV_DRIVER = origInsecure;
+        else delete process.env.ALLOW_INSECURE_DEV_DRIVER;
+      }
+    });
+
+    it('should select GVisorDriver automatically in production via driver factory', () => {
+      const origNodeEnv = process.env.NODE_ENV;
+      try {
+        process.env.NODE_ENV = 'production';
+        const driver = createDefaultSandboxDriver();
+        expect(driver.name).toBe('gvisor');
+      } finally {
+        if (origNodeEnv !== undefined) process.env.NODE_ENV = origNodeEnv;
+        else delete process.env.NODE_ENV;
+      }
     });
   });
 
@@ -335,6 +410,39 @@ describe('Red-Team Security Test Suite (Prompt 16)', () => {
       expect(() =>
         requireIdentity(tokenForAppB, { audience: 'capsule:app-a' })
       ).toThrow(/Audience mismatch/);
+    });
+
+    it('should reject raw unsigned JSON identity header in strict production mode (SEC-001)', () => {
+      const rawJson = JSON.stringify({
+        sub: 'attacker-666',
+        roles: ['owner', 'admin'],
+        email: 'attacker@evil.com',
+      });
+
+      process.env.STRICT_IDENTITY = 'true';
+      try {
+        // Must return null when throwOnError is false
+        expect(getIdentity(rawJson)).toBeNull();
+
+        // Must throw IdentityVerificationError with UNSIGNED_IDENTITY_REJECTED
+        expect(() => requireIdentity(rawJson)).toThrow(IdentityVerificationError);
+        expect(() => requireIdentity(rawJson)).toThrow(/Unsigned identity header rejected/i);
+      } finally {
+        delete process.env.STRICT_IDENTITY;
+      }
+    });
+
+    it('should reject identity token signed with untrusted/wrong key (SEC-003)', () => {
+      // Sign with an attacker key
+      const attackerToken = createDevIdentityToken({
+        userId: 'attacker-123',
+        roles: ['admin'],
+        secret: 'attacker-untrusted-secret-key-99999',
+      });
+
+      expect(getIdentity(attackerToken)).toBeNull();
+      expect(() => requireIdentity(attackerToken)).toThrow(IdentityVerificationError);
+      expect(() => requireIdentity(attackerToken)).toThrow(/Invalid identity token signature/i);
     });
   });
 

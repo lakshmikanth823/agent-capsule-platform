@@ -66,3 +66,8 @@ def test_migrations_lifecycle(alembic_cfg):
     inspector = inspect(sync_engine)
     current_tables = set(inspector.get_table_names())
     assert expected_tables.issubset(current_tables)
+
+    # 5. Reseed database so subsequent tests have seed data
+    import asyncio
+    from db.seed import seed_database
+    asyncio.run(seed_database())

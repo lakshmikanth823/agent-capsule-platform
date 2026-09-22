@@ -377,10 +377,11 @@ def validate_manifest(input_data: Any) -> Dict[str, Any]:
                 "cpu": manifest.get("limits", {}).get("cpu", "small"),
                 "memory_mb": manifest.get("limits", {}).get("memory_mb", 256),
                 "request_timeout_s": manifest.get("limits", {}).get("request_timeout_s", 30),
-                "db_max_mb": manifest.get("limits", {}).get("db_max_mb", 500),
+                "db_max_mb": manifest.get("limits", {}).get("db_max_mb", 50),
                 "blob_max_mb": manifest.get("limits", {}).get("blob_max_mb", 200),
                 "max_active_instances": 1,
             },
+
         }
 
     return {

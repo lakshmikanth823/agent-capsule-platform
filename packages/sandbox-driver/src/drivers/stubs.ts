@@ -25,57 +25,11 @@ export class NotImplementedError extends Error {
 }
 
 /**
- * GVisorDriver (Production Stub)
- *
- * Architecture:
- * - Runtime: gVisor `runsc` (syscall-intercepting sandbox).
- * - Sentry: Implements a user-space Linux kernel in Go, preventing untrusted
- *   application code from executing raw syscalls against the host kernel.
- * - Gofer: File proxy process mediating all filesystem access.
- * - Netstack: User-space network stack enabling fine-grained egress filtering
- *   and network isolation without host iptables manipulation.
- *
- * Security boundary: Strong process and kernel boundary.
+ * GVisorDriver
+ * Phase 1 Production Driver: implemented in ./gvisor.ts
  */
-export class GVisorDriver implements SandboxDriver {
-  readonly name = 'gvisor';
+export { GVisorDriver, type GVisorDriverOptions } from './gvisor.js';
 
-  async start(_spec: SandboxSpec): Promise<SandboxInstance> {
-    throw new NotImplementedError(this.name, 'Configured via `docker run --runtime=runsc`.');
-  }
-
-  async stop(_instanceId: string): Promise<void> {
-    throw new NotImplementedError(this.name, 'Stops runsc container.');
-  }
-
-  async suspend(_instanceId: string): Promise<void> {
-    throw new NotImplementedError(this.name, 'Freezes runsc container via cgroups v2 freezer.');
-  }
-
-  async resume(_instanceId: string): Promise<void> {
-    throw new NotImplementedError(this.name, 'Thaws runsc container.');
-  }
-
-  async status(_instanceId: string): Promise<SandboxStatus> {
-    throw new NotImplementedError(this.name, 'Queries runsc state.');
-  }
-
-  async logs(_instanceId: string, _options?: LogOptions): Promise<string[]> {
-    throw new NotImplementedError(this.name, 'Fetches runsc console logs.');
-  }
-
-  async forwardRequest(_instanceId: string, _req: ForwardRequest): Promise<ForwardResponse> {
-    throw new NotImplementedError(this.name, 'Forwards request via Netstack tap device.');
-  }
-
-  async recover(_instanceId: string): Promise<SandboxInstance> {
-    throw new NotImplementedError(this.name, 'Recovers runsc sandbox.');
-  }
-
-  async destroy(_instanceId: string): Promise<void> {
-    throw new NotImplementedError(this.name, 'Destroys runsc sandbox.');
-  }
-}
 
 /**
  * FirecrackerDriver (Production Stub)

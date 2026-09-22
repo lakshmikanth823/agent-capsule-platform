@@ -1,0 +1,52 @@
+# Git metadata
+.git
+.gitignore
+
+# Node.js
+node_modules
+**/node_modules
+**/.npm
+
+# Python
+.venv
+**/__pycache__
+**/*.pyc
+**/.pytest_cache
+
+# Build artifacts (rebuilt in Docker)
+**/dist
+**/.next
+
+# Local dev files
+.env
+.env.*
+!.env.example
+
+# Test files (not needed in production images)
+**/tests
+**/test
+**/*.test.ts
+**/*.spec.ts
+**/vitest.config*
+
+# Documentation
+docs/
+
+# CI/CD
+.github/
+
+# Deploy directory (not needed inside containers)
+deploy/
+
+# Data directories
+data/
+.capsule/
+
+# IDE / OS
+.vscode
+.idea
+**/.DS_Store
+Thumbs.db
+
+# Examples (not needed in production images)
+examples/

@@ -16,8 +16,8 @@ class CreateAppRequest(BaseModel):
     id: str = Field(..., pattern=r"^[a-z0-9][a-z0-9-]{0,62}$", description="App key / identifier")
     name: str = Field(..., max_length=80)
     description: Optional[str] = None
-    shape: Literal["web-app"] = "web-app"
-    runtime: Literal["node22"] = "node22"
+    shape: str = "web-app"
+    runtime: str = "node22"
     manifest: Dict[str, Any]
 
 

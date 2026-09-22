@@ -15,6 +15,7 @@
     "build": "npm run --workspaces --if-present build",
     "test": "npm run test:ts && npm run test:py",
     "test:ts": "vitest run",
+    "test:redteam": "vitest run tests/redteam/redteam.test.ts",
     "test:py": "powershell -Command \"if (Test-Path .venv/Scripts/python.exe) { .venv/Scripts/python.exe -m pytest services/control-plane/tests } else { python -m pytest services/control-plane/tests }\"",
     "lint": "npm run --workspaces --if-present lint",
     "format": "prettier --write \"**/*.{ts,js,json,md,yaml,yml}\"",

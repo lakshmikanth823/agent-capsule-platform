@@ -33,9 +33,35 @@ export class DockerDevDriver implements SandboxDriver {
   private instances = new Map<string, SandboxInstance>();
 
   constructor() {
-    console.warn(
-      '[WARNING] DockerDevDriver is for local development and testing only. It is NOT a security boundary.'
-    );
+    // STARTUP GUARD: Refuse to start in production unless explicit override is set
+    const isProduction = process.env.NODE_ENV === 'production';
+    const allowInsecure =
+      process.env.ALLOW_INSECURE_DEV_DRIVER === 'true' ||
+      process.env.ALLOW_INSECURE_DEV_DRIVER === '1';
+
+    if (isProduction && !allowInsecure) {
+      throw new Error(
+        '[SECURITY INVARIANT VIOLATION] DockerDevDriver is an insecure development driver and cannot be used in production. ' +
+        'Untrusted code could escape container boundaries through host kernel vulnerabilities. ' +
+        'Use GVisorDriver (runsc) or set ALLOW_INSECURE_DEV_DRIVER=true to bypass (UNSAFE).'
+      );
+    }
+
+    if (isProduction && allowInsecure) {
+      console.warn(
+        '\n' +
+        '********************************************************************************\n' +
+        '* [CRITICAL SECURITY WARNING] INSECURE DEVELOPMENT DRIVER RUNNING IN PRODUCTION *\n' +
+        '* ALLOW_INSECURE_DEV_DRIVER=true is set. Containers share the host Linux       *\n' +
+        '* kernel and do NOT form a multi-tenant security boundary.                    *\n' +
+        '* Use GVisorDriver (runsc) in production to enforce kernel isolation.         *\n' +
+        '********************************************************************************\n'
+      );
+    } else {
+      console.warn(
+        '[WARNING] DockerDevDriver is for local development and testing only. It is NOT a security boundary.'
+      );
+    }
   }
 
   private normalizePathForDocker(p: string): string {
@@ -49,18 +75,14 @@ export class DockerDevDriver implements SandboxDriver {
     return cpu;
   }
 
-  async start(spec: SandboxSpec): Promise<SandboxInstance> {
-    const instanceId = `capsule-${spec.capsuleId}-${Date.now()}`;
+  /**
+   * Constructs the hardened Docker execution arguments for a sandbox specification.
+   */
+  async buildExecutionArgs(spec: SandboxSpec, instanceId: string): Promise<string[]> {
     const cpuLimit = this.parseCpuLimit(spec.limits?.cpu);
     const memoryMb = spec.limits?.memoryMb || 256;
     const pidsLimit = spec.limits?.pidsLimit || 64;
     const networkMode = spec.networkMode || 'none';
-
-    // Ensure data directory exists on host if dataDir is specified
-    if (spec.dataDir) {
-      await fs.mkdir(spec.dataDir, { recursive: true });
-      await fs.mkdir(path.join(spec.dataDir, 'blobs'), { recursive: true });
-    }
 
     const normalizedAppDir = this.normalizePathForDocker(spec.bundlePath);
 
@@ -147,6 +169,19 @@ export class DockerDevDriver implements SandboxDriver {
 
     // Base runtime image and command
     dockerArgs.push('node:22-alpine', 'node', entrypoint);
+    return dockerArgs;
+  }
+
+  async start(spec: SandboxSpec): Promise<SandboxInstance> {
+    const instanceId = `capsule-${spec.capsuleId}-${Date.now()}`;
+
+    // Ensure data directory exists on host if dataDir is specified
+    if (spec.dataDir) {
+      await fs.mkdir(spec.dataDir, { recursive: true });
+      await fs.mkdir(path.join(spec.dataDir, 'blobs'), { recursive: true });
+    }
+
+    const dockerArgs = await this.buildExecutionArgs(spec, instanceId);
 
     try {
       await execFileAsync('docker', dockerArgs);
@@ -170,8 +205,13 @@ export class DockerDevDriver implements SandboxDriver {
 
       return instance;
     } catch (err: any) {
+      let containerLogs = '';
+      try {
+        const logsArr = await this.logs(instanceId);
+        containerLogs = logsArr.join('\n');
+      } catch {}
       await this.destroy(instanceId).catch(() => {});
-      throw new Error(`Failed to start Docker sandbox: ${err.message || err}`);
+      throw new Error(`Failed to start Docker sandbox: ${err.message || err}. Container logs: ${containerLogs}`);
     }
   }
 

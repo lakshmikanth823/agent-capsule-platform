@@ -17,4 +17,14 @@ describe('Dashboard App Package', () => {
     };
     expect(app.status).toBe('active');
   });
+
+  it('should export Environment Profile API methods and types', async () => {
+    const { api, EnvironmentProfileScreen } = await import('../src/index.js');
+    expect(typeof api.getEnvironmentProfile).toBe('function');
+    expect(typeof api.previewProfileDiff).toBe('function');
+    expect(typeof api.updateEnvironmentProfile).toBe('function');
+    expect(typeof api.getEffectivePolicy).toBe('function');
+    expect(typeof EnvironmentProfileScreen).toBe('function');
+  });
 });
+

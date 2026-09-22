@@ -1,0 +1,91 @@
+# ==============================================================================
+# Capsule Platform — Sandbox Host Compose File
+# Used on dedicated sandbox-host EC2 instances.
+# These hosts have gVisor (runsc) installed and registered as a Docker runtime.
+# Capsule containers are launched directly by control-plane via Docker API —
+# this compose file manages the supporting services only.
+# ==============================================================================
+
+name: capsule-sandbox-host
+
+services:
+
+  # ── Build service — compiles capsule bundles in isolated containers ────────
+  builder:
+    image: "${ECR_REGISTRY}/capsule/builder:${IMAGE_TAG}"
+    restart: always
+    environment:
+      AWS_REGION: "${AWS_REGION}"
+      AWS_SECRET_NAME: "${SH_SECRET_NAME}"
+      PLATFORM_ENV: production
+      S3_BUCKET: "${S3_BUCKET}"
+      S3_REGION: "${AWS_REGION}"
+      # Control plane endpoint so builder can report build status
+      CONTROL_PLANE_URL: "http://${CONTROL_PLANE_INTERNAL_IP}:8000"
+      # Docker socket for launching isolated build containers
+      DOCKER_HOST: unix:///var/run/docker.sock
+      # gVisor runtime name (registered as 'runsc' in /etc/docker/daemon.json)
+      SANDBOX_RUNTIME: runsc
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    ports:
+      - "127.0.0.1:8090:8090"   # Bound to loopback only — internal use
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8090/healthz"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    logging:
+      driver: awslogs
+      options:
+        awslogs-group: /capsule/builder
+        awslogs-region: "${AWS_REGION}"
+        awslogs-stream-prefix: builder
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: "2048M"
+    networks:
+      - sandbox-net
+
+  # ── Egress proxy — enforces allowlist-based outbound network access ────────
+  egress-proxy:
+    image: "${ECR_REGISTRY}/capsule/egress-proxy:${IMAGE_TAG}"
+    restart: always
+    environment:
+      AWS_REGION: "${AWS_REGION}"
+      AWS_SECRET_NAME: "${SH_SECRET_NAME}"
+      PLATFORM_ENV: production
+      CONTROL_PLANE_URL: "http://${CONTROL_PLANE_INTERNAL_IP}:8000"
+      LISTEN_PORT: "3128"
+    ports:
+      # Exposed on LAN so gVisor sandbox containers can reach it
+      - "3128:3128"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3128/healthz"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    logging:
+      driver: awslogs
+      options:
+        awslogs-group: /capsule/egress-proxy
+        awslogs-region: "${AWS_REGION}"
+        awslogs-stream-prefix: egress
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: "256M"
+    networks:
+      - sandbox-net
+
+networks:
+  sandbox-net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.30.0.0/16

@@ -1,0 +1,83 @@
+groups:
+  - name: capsule.platform
+    rules:
+      # ── API Error Rate ─────────────────────────────────────────────────────
+      - alert: HighAPIErrorRate
+        expr: |
+          rate(http_requests_total{job="control-plane",status=~"5.."}[5m])
+          / rate(http_requests_total{job="control-plane"}[5m]) > 0.05
+        for: 2m
+        labels:
+          severity: critical
+          environment: production
+        annotations:
+          summary: "High API error rate ({{ $value | humanizePercentage }})"
+          description: "Control plane 5xx error rate is {{ $value | humanizePercentage }} over 5 min."
+
+      # ── Sandbox Launch Failures ────────────────────────────────────────────
+      - alert: SandboxLaunchFailures
+        expr: rate(capsule_sandbox_launch_failures_total[5m]) > 3
+        for: 1m
+        labels:
+          severity: critical
+          environment: production
+        annotations:
+          summary: "Sandbox launch failures > 3/min"
+          description: "{{ $value }} sandbox launch failures per minute detected."
+
+      # ── Egress Deny Spike ─────────────────────────────────────────────────
+      - alert: EgressDenySpike
+        expr: rate(capsule_egress_denied_total[5m]) > 20
+        for: 2m
+        labels:
+          severity: warning
+          team: security
+          environment: production
+        annotations:
+          summary: "Egress deny rate spike ({{ $value }}/s)"
+          description: "Egress proxy is denying > 20 requests/sec. Possible SSRF attempt."
+
+      # ── Database Connection Failures ───────────────────────────────────────
+      - alert: DatabaseConnectionFailures
+        expr: capsule_db_connection_errors_total > 0
+        for: 1m
+        labels:
+          severity: critical
+          environment: production
+        annotations:
+          summary: "Database connection errors detected"
+          description: "{{ $value }} DB connection errors in the last minute."
+
+      # ── Disk Usage on Sandbox Host ─────────────────────────────────────────
+      - alert: DiskSpaceLow
+        expr: |
+          (node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"}) < 0.15
+        for: 5m
+        labels:
+          severity: warning
+          environment: production
+        annotations:
+          summary: "Low disk space on {{ $labels.instance }}"
+          description: "Disk usage is above 85% on {{ $labels.instance }}."
+
+      # ── Control Plane Down ────────────────────────────────────────────────
+      - alert: ControlPlaneDown
+        expr: up{job="control-plane"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          environment: production
+        annotations:
+          summary: "Control plane is down"
+          description: "Control plane has not been reachable for 1 minute."
+
+      # ── Budget Hard Stop Rate (AI Gateway) ────────────────────────────────
+      - alert: AIBudgetExhausted
+        expr: rate(capsule_ai_budget_hard_stop_total[15m]) > 0
+        for: 0m
+        labels:
+          severity: warning
+          environment: production
+        annotations:
+          summary: "AI Gateway budget hard-stop triggered"
+          description: "An org/app hit its monthly AI spend budget hard-stop."

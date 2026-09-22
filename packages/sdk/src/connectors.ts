@@ -21,6 +21,22 @@ export interface ConnectorInvokeOptions {
   brokerUrl?: string;
 }
 
+export interface SheetsReadPayload {
+  spreadsheet_id?: string;
+  spreadsheetId?: string;
+  range?: string;
+}
+
+export interface SheetsReadResponse {
+  connector: string;
+  status: 'success' | 'failed';
+  spreadsheet_id: string;
+  range: string;
+  major_dimension: string;
+  values: any[][];
+  emulator?: boolean;
+}
+
 export class ConnectorError extends Error {
   constructor(
     message: string,
@@ -134,6 +150,24 @@ export class PlatformConnectorClient implements ConnectorClient {
         channel,
         ts: `${Date.now() / 1000}`,
         echo_text: text,
+        emulator: true,
+      } as unknown as T;
+    }
+
+    if (this.name === 'sheets.read' || this.name === 'google_sheets.read') {
+      const spreadsheetId = payload?.spreadsheet_id || payload?.spreadsheetId || 'sheet-demo-1';
+      const range = payload?.range || 'A1:Z100';
+      return {
+        connector: 'sheets.read',
+        status: 'success',
+        spreadsheet_id: spreadsheetId,
+        range,
+        major_dimension: 'ROWS',
+        values: [
+          ['ID', 'Name', 'Department'],
+          ['EMP-01', 'Alice Smith', 'Engineering'],
+          ['EMP-02', 'Bob Jones', 'Product'],
+        ],
         emulator: true,
       } as unknown as T;
     }

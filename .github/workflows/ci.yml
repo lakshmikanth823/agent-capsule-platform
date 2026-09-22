@@ -1,0 +1,276 @@
+name: CI
+
+on:
+  push:
+    branches: [main, 'release/**']
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: "22"
+  PYTHON_VERSION: "3.12"
+
+jobs:
+  # ── 1. TypeScript tests ─────────────────────────────────────────────────────
+  test-ts:
+    name: TypeScript Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js ${{ env.NODE_VERSION }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run TypeScript tests
+        run: npm run test:ts
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ts-test-results
+          path: "**/*.xml"
+          if-no-files-found: ignore
+
+  # ── 2. Python tests ─────────────────────────────────────────────────────────
+  test-py:
+    name: Python Tests
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: capsule_test
+          POSTGRES_USER: capsule_user
+          POSTGRES_PASSWORD: test_password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgresql+asyncpg://capsule_user:test_password@localhost:5432/capsule_test
+      PLATFORM_ENV: test
+      AUTH_PROVIDER: mock
+      JWT_SIGNING_SECRET: test-jwt-secret
+      STORAGE_DRIVER: local
+      STORAGE_LOCAL_DIR: /tmp/capsule-test-storage
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: services/control-plane/requirements.txt
+
+      - name: Install Python dependencies
+        run: |
+          python -m venv .venv
+          .venv/bin/pip install --upgrade pip
+          .venv/bin/pip install -r services/control-plane/requirements.txt
+
+      - name: Run Alembic migrations
+        run: |
+          .venv/bin/python -m alembic -c services/control-plane/alembic.ini upgrade head
+
+      - name: Run Python tests
+        run: .venv/bin/python -m pytest services/control-plane/tests -v --tb=short
+
+  # ── 3. Lint & Typecheck ─────────────────────────────────────────────────────
+  lint:
+    name: Lint & Typecheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js ${{ env.NODE_VERSION }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: TypeScript typecheck
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Format check
+        run: npx prettier --check "**/*.{ts,js,json,md,yaml,yml}"
+
+  # ── 4. Dependency Audit ─────────────────────────────────────────────────────
+  audit:
+    name: Dependency Audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js ${{ env.NODE_VERSION }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: npm audit (high+critical)
+        run: npm audit --audit-level=high
+
+      - name: Setup Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: services/control-plane/requirements.txt
+
+      - name: pip-audit
+        run: |
+          pip install pip-audit
+          pip-audit -r services/control-plane/requirements.txt --severity high
+
+  # ── 5. Docker Image Build & Security Scan ──────────────────────────────────
+  image-scan:
+    name: Build & Scan Docker Images
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        service:
+          - name: control-plane
+            context: .
+            dockerfile: services/control-plane/Dockerfile
+          - name: edge-proxy
+            context: .
+            dockerfile: services/edge-proxy/Dockerfile
+          - name: egress-proxy
+            context: .
+            dockerfile: services/egress-proxy/Dockerfile
+          - name: builder
+            context: .
+            dockerfile: services/builder/Dockerfile
+          - name: dashboard
+            context: .
+            dockerfile: apps/dashboard/Dockerfile
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: ${{ matrix.service.context }}
+          file: ${{ matrix.service.dockerfile }}
+          push: false
+          tags: "capsule/${{ matrix.service.name }}:scan-${{ github.sha }}"
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Scan with Trivy (HIGH + CRITICAL)
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: "capsule/${{ matrix.service.name }}:scan-${{ github.sha }}"
+          format: table
+          exit-code: "1"
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+
+  # ── 6. Red-Team Security Suite (required gate) ──────────────────────────────
+  red-team:
+    name: Red-Team Security Suite
+    runs-on: ubuntu-latest
+    needs: [test-ts, test-py]
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: capsule_redteam
+          POSTGRES_USER: capsule_user
+          POSTGRES_PASSWORD: test_password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgresql+asyncpg://capsule_user:test_password@localhost:5432/capsule_redteam
+      PLATFORM_ENV: test
+      AUTH_PROVIDER: mock
+      JWT_SIGNING_SECRET: test-jwt-secret
+      STORAGE_DRIVER: local
+      STORAGE_LOCAL_DIR: /tmp/capsule-redteam-storage
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js ${{ env.NODE_VERSION }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Setup Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: services/control-plane/requirements.txt
+
+      - name: Install all dependencies
+        run: |
+          npm ci
+          python -m venv .venv
+          .venv/bin/pip install --upgrade pip
+          .venv/bin/pip install -r services/control-plane/requirements.txt
+
+      - name: Run Alembic migrations
+        run: .venv/bin/python -m alembic -c services/control-plane/alembic.ini upgrade head
+
+      - name: Run red-team suite
+        run: npm run test:redteam
+        # test:redteam must be defined in package.json scripts
+        # It runs the adversarial/security test files (e.g. tests/red-team/)
+
+      - name: Upload red-team report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: red-team-report-${{ github.sha }}
+          path: "tests/red-team/report/**"
+          if-no-files-found: ignore
+
+  # ── Final gate — all checks must pass ───────────────────────────────────────
+  ci-gate:
+    name: CI Gate (all required checks)
+    runs-on: ubuntu-latest
+    needs: [test-ts, test-py, lint, audit, image-scan, red-team]
+    if: always()
+    steps:
+      - name: Check all jobs passed
+        run: |
+          if [[ "${{ needs.test-ts.result }}" != "success" ||
+                "${{ needs.test-py.result }}" != "success" ||
+                "${{ needs.lint.result }}" != "success" ||
+                "${{ needs.audit.result }}" != "success" ||
+                "${{ needs.image-scan.result }}" != "success" ||
+                "${{ needs.red-team.result }}" != "success" ]]; then
+            echo "One or more required checks failed. Blocking merge."
+            exit 1
+          fi
+          echo "All required checks passed."

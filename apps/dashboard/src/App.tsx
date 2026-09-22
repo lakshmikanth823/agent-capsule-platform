@@ -6,6 +6,11 @@ import { SignInScreen } from './screens/SignInScreen';
 import { AppsListScreen } from './screens/AppsListScreen';
 import { AppDetailScreen } from './screens/AppDetailScreen';
 import { VersionHistoryScreen } from './screens/VersionHistoryScreen';
+import { EnvironmentProfileScreen } from './screens/EnvironmentProfileScreen';
+import { SSODirectorySyncScreen } from './screens/SSODirectorySyncScreen';
+import { AuditLogScreen } from './screens/AuditLogScreen';
+import { InventoryScreen } from './screens/InventoryScreen';
+import { AIGatewayScreen } from './screens/AIGatewayScreen';
 import { ShieldCheck, Layers, Settings, Activity } from 'lucide-react';
 
 export const App: React.FC = () => {
@@ -89,6 +94,17 @@ export const App: React.FC = () => {
         />
       )}
 
+      {activeNav === 'inventory' && (
+        <InventoryScreen
+          currentUser={currentUser}
+          onSelectApp={handleSelectApp}
+        />
+      )}
+
+      {activeNav === 'ai' && (
+        <AIGatewayScreen currentUser={currentUser} />
+      )}
+
       {activeNav === 'app-detail' && selectedAppId && (
         <AppDetailScreen
           appId={selectedAppId}
@@ -124,38 +140,15 @@ export const App: React.FC = () => {
       )}
 
       {activeNav === 'environment' && (
-        <div className="max-w-4xl mx-auto space-y-4">
-          <h2 className="text-xl font-bold text-slate-900 flex items-center gap-2">
-            <Layers className="w-5 h-5 text-indigo-600" />
-            Environment & Sandbox Runtimes
-          </h2>
-          <div className="p-6 bg-white border border-slate-200 rounded-xl text-xs space-y-3">
-            <p className="text-slate-600">Active sandbox driver and isolation infrastructure configuration:</p>
-            <div className="grid grid-cols-2 gap-4 pt-2">
-              <div className="p-4 bg-slate-50 border border-slate-200 rounded-lg">
-                <span className="font-bold text-slate-900 block mb-1">Development Sandbox Driver</span>
-                <span className="text-slate-600">DockerDevDriver (Non-root, read-only rootfs, dropped caps, network=none)</span>
-              </div>
-              <div className="p-4 bg-slate-50 border border-slate-200 rounded-lg">
-                <span className="font-bold text-slate-900 block mb-1">Production Sandbox Driver</span>
-                <span className="text-slate-600">gVisor / Firecracker (OCI MicroVM Boundary)</span>
-              </div>
-            </div>
-          </div>
-        </div>
+        <EnvironmentProfileScreen currentUser={currentUser} />
+      )}
+
+      {activeNav === 'sso' && (
+        <SSODirectorySyncScreen currentUser={currentUser} />
       )}
 
       {activeNav === 'audit' && (
-        <div className="max-w-4xl mx-auto space-y-4">
-          <h2 className="text-xl font-bold text-slate-900 flex items-center gap-2">
-            <ShieldCheck className="w-5 h-5 text-indigo-600" />
-            Compliance & Audit Vault
-          </h2>
-          <div className="p-6 bg-white border border-slate-200 rounded-xl text-xs text-slate-600 space-y-2">
-            <p>All administrative mutations and capability approval escalations are immutably signed and preserved.</p>
-            <p className="font-mono text-slate-500">Security Invariants 1 through 10 verified.</p>
-          </div>
-        </div>
+        <AuditLogScreen currentUser={currentUser} />
       )}
 
       {activeNav === 'settings' && (

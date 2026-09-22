@@ -117,6 +117,15 @@
               "type": "number",
               "minimum": 0,
               "maximum": 100000
+            },
+            "model": {
+              "type": "string"
+            },
+            "models": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
             }
           }
         },
@@ -151,6 +160,13 @@
             "viewer",
             "service"
           ]
+        },
+        "spreadsheet_ids": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Restricts sheets.read access to specific spreadsheet IDs"
         }
       }
     },

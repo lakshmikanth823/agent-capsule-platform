@@ -8,7 +8,10 @@ import {
   Settings, 
   LogOut, 
   User as UserIcon,
-  ExternalLink
+  ExternalLink,
+  KeyRound,
+  ClipboardList,
+  Sparkles
 } from 'lucide-react';
 
 interface LayoutProps {
@@ -28,8 +31,11 @@ export const Layout: React.FC<LayoutProps> = ({
 }) => {
   const navItems = [
     { id: 'capsules', label: 'Capsules', icon: Box },
+    { id: 'inventory', label: 'Inventory', icon: ClipboardList },
+    { id: 'ai', label: 'AI Gateway', icon: Sparkles },
     { id: 'activity', label: 'Activity', icon: Activity },
     { id: 'environment', label: 'Environment', icon: Layers },
+    { id: 'sso', label: 'SSO & SCIM', icon: KeyRound },
     { id: 'audit', label: 'Audit', icon: ShieldCheck },
     { id: 'settings', label: 'Settings', icon: Settings },
   ];

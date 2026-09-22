@@ -38,6 +38,17 @@ import {
   type ConnectorClient,
   type ConnectorInvokeOptions,
 } from './connectors.js';
+import {
+  getAI,
+  PlatformAIClient,
+  AIGatewayError,
+  type AIChatMessage,
+  type AIChatOptions,
+  type AIChatResponse,
+  type AIStreamChunk,
+  type AppAIUsage,
+  type AIUsageMetrics,
+} from './ai.js';
 
 export {
   // Database
@@ -73,6 +84,16 @@ export {
   ConnectorError,
   ConnectorClient,
   ConnectorInvokeOptions,
+  // AI Gateway
+  getAI,
+  PlatformAIClient,
+  AIGatewayError,
+  AIChatMessage,
+  AIChatOptions,
+  AIChatResponse,
+  AIStreamChunk,
+  AppAIUsage,
+  AIUsageMetrics,
 };
 
 /**
@@ -101,6 +122,9 @@ export const sdk = {
   },
   get files() {
     return getFiles();
+  },
+  get ai() {
+    return getAI();
   },
   connector: (name: string) => getConnector(name),
   connectors: {

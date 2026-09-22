@@ -189,4 +189,19 @@ export class ApiClient {
       idempotencyKey: options.idempotencyKey,
     });
   }
+
+  // Kill Switch
+  async suspendApp(appIdOrKey: string, reason: string): Promise<any> {
+    return this.request(`/v1/kill-switch/apps/${appIdOrKey}/suspend`, {
+      method: 'POST',
+      body: { reason },
+    });
+  }
+
+  async resumeApp(appIdOrKey: string): Promise<any> {
+    return this.request(`/v1/kill-switch/apps/${appIdOrKey}/resume`, {
+      method: 'POST',
+    });
+  }
 }
+

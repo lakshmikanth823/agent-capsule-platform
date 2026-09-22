@@ -7,6 +7,7 @@ export interface ConnectorDeclaration {
   name: string;
   channel?: string;
   acts_as: 'viewer' | 'service';
+  spreadsheet_ids?: string[];
 }
 
 export interface ManifestCapabilities {
@@ -19,6 +20,8 @@ export interface ManifestCapabilities {
   };
   ai?: {
     monthly_budget_usd: number;
+    model?: string;
+    models?: string[];
   };
   connectors?: ConnectorDeclaration[];
 }

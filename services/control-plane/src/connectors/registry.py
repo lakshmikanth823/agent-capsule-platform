@@ -2,10 +2,12 @@ from typing import Dict, Optional, List
 from .base import BaseConnector
 from .fake_echo import FakeEchoConnector
 from .slack_post import SlackPostConnector
+from .google_sheets import GoogleSheetsReadConnector
 
 _CONNECTORS: Dict[str, BaseConnector] = {
     FakeEchoConnector.name: FakeEchoConnector(),
     SlackPostConnector.name: SlackPostConnector(),
+    GoogleSheetsReadConnector.name: GoogleSheetsReadConnector(),
 }
 
 
