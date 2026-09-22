@@ -12,8 +12,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY services/control-plane/requirements.txt ./requirements.txt
 RUN python -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
-RUN pip install --no-cache-dir --upgrade pip "setuptools>=78.1.1" \
+RUN pip install --no-cache-dir --upgrade pip "setuptools>=78.1.1" "msgpack>=1.2.1" \
     && pip install --no-cache-dir -r requirements.txt \
+    && pip install --no-cache-dir "awscli" "msgpack>=1.2.1" \
     && rm -rf /opt/venv/lib/python3.12/site-packages/setuptools*
 
 # ── Stage 2: runtime image ───────────────────────────────────────────────────
@@ -25,8 +26,10 @@ RUN groupadd --gid 1001 capsule \
 
 # Runtime libs only (libpq for asyncpg)
 RUN apt-get update && apt-get upgrade -y && apt-get install -y --no-install-recommends \
-    libpq5 curl awscli \
-    && rm -rf /var/lib/apt/lists/*
+    libpq5 curl \
+    && rm -rf /var/lib/apt/lists/* \
+    && rm -rf /usr/lib/python3/dist-packages/setuptools* \
+    && rm -rf /usr/local/lib/python3.12/site-packages/setuptools*
 
 WORKDIR /app
 
