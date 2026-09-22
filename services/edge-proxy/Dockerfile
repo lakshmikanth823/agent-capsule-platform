@@ -22,11 +22,15 @@ RUN npm run build --workspace=services/edge-proxy
 # ── Stage 2: runtime ─────────────────────────────────────────────────────────
 FROM node:22-slim AS runtime
 
-RUN groupadd --gid 1001 capsule \
-    && useradd --uid 1001 --gid 1001 --no-create-home capsule \
-    && apt-get update && apt-get upgrade -y && apt-get install -y --no-install-recommends curl \
+# Edge proxy needs docker CLI to manage gVisor/runsc sandbox containers
+RUN apt-get update && apt-get upgrade -y && apt-get install -y --no-install-recommends \
+    curl docker.io \
     && rm -rf /var/lib/apt/lists/* \
     && rm -rf /usr/local/lib/node_modules/npm
+
+# Non-root user but member of docker group so it can reach the Docker socket
+RUN groupadd --gid 1001 capsule \
+    && useradd --uid 1001 --gid 1001 --no-create-home --groups docker capsule
 
 WORKDIR /app
 

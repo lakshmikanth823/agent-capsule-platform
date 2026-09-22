@@ -190,7 +190,13 @@ export function createEdgeProxyServer(options?: {
       const controlPlaneUrl =
         process.env.CONTROL_PLANE_URL || "http://127.0.0.1:8000";
       const serviceToken =
-        process.env.CONTROL_PLANE_SERVICE_TOKEN || "Bearer mock-alice-token";
+        process.env.CONTROL_PLANE_SERVICE_TOKEN ||
+        (config.isProduction ? "" : "Bearer mock-alice-token");
+      if (config.isProduction && !serviceToken) {
+        throw new Error(
+          "SECURITY VIOLATION: CONTROL_PLANE_SERVICE_TOKEN is required in production.",
+        );
+      }
       const res = await fetch(`${controlPlaneUrl}/v1/apps/${appKey}`, {
         headers: { Authorization: serviceToken },
       });
@@ -838,9 +844,13 @@ export function createEdgeProxyServer(options?: {
       }
 
       if (
+        err.code === "SANDBOX_UNAVAILABLE" ||
         err.message?.includes("SANDBOX_UNAVAILABLE") ||
         err.message?.includes("gVisor runtime is not available") ||
-        err.code === "SANDBOX_UNAVAILABLE"
+        err.message?.includes("is not configured in Docker daemon") ||
+        err.message?.includes("not configured in Docker daemon") ||
+        (err.message?.includes("runtime") &&
+          err.message?.includes("not configured"))
       ) {
         res.writeHead(503, { "Content-Type": "application/json" });
         res.end(

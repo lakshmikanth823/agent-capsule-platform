@@ -77,10 +77,18 @@ services:
       PORT: "8080"
       CONTROL_PLANE_URL: "http://control-plane:8000"
       PLATFORM_DOMAIN: "${PLATFORM_DOMAIN}"
+      DASHBOARD_DOMAIN: "${PLATFORM_DOMAIN}"
       APP_BASE_DOMAIN: "${APP_BASE_DOMAIN}"
+      APP_DOMAIN: "${APP_BASE_DOMAIN}"
+      IDENTITY_SIGNING_KEY: "${IDENTITY_SIGNING_KEY}"
+      SESSION_SECRET: "${SESSION_SECRET}"
+      CONTROL_PLANE_SERVICE_TOKEN: "${CONTROL_PLANE_SERVICE_TOKEN}"
       PLATFORM_ENV: production
       NODE_ENV: production
       SANDBOX_DRIVER: gvisor
+      DOCKER_HOST: unix:///var/run/docker.sock
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/healthz"]
       interval: 15s

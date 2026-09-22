@@ -234,11 +234,13 @@ export class GVisorDriver implements SandboxDriver {
     // Verify runtime availability before spawning
     const available = await this.isAvailable();
     if (!available && !process.env.ALLOW_DEV_FALLBACK) {
-      throw new Error(
+      const err = new Error(
         `[GVisorDriver] gVisor runtime '${this.runtimeName}' is not configured in Docker daemon. ` +
           `Install gVisor runsc (https://gvisor.dev/docs/user_guide/install/) and register it in /etc/docker/daemon.json, ` +
           `or set ALLOW_DEV_FALLBACK=1 for local development testing.`,
       );
+      (err as any).code = "SANDBOX_UNAVAILABLE";
+      throw err;
     }
 
     // If fallback is enabled in dev environment, replace --runtime runsc with default runc

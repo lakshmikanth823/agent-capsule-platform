@@ -1,3 +1,11 @@
+/**
+ * Proxy Auth & Sharing Flow Simulation (Leave Tracker)
+ *
+ * NOTE: This is an in-memory proxy-level integration simulation using DevMockSandboxDriver.
+ * It validates the edge-proxy's end-to-end authentication handshake, RBAC role injection,
+ * share-granting flow, and tenant/role data isolation logic locally without requiring
+ * live cloud infrastructure (AWS/ECR/gVisor/Postgres).
+ */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import http from "node:http";
 import { AddressInfo } from "node:net";
@@ -15,7 +23,7 @@ import {
   type ForwardResponse,
 } from "@capsule/sandbox-driver";
 
-describe("Staging E2E Test: Leave Tracker Sharing & Data Isolation", () => {
+describe("Proxy Auth & Sharing Flow Simulation: Leave Tracker", () => {
   let server: http.Server;
   let serverPort: number;
   let lifecycleManager: CapsuleLifecycleManager;
