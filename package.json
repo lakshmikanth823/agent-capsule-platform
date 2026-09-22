@@ -19,7 +19,7 @@
     "test:ts": "vitest run",
     "test:redteam": "vitest run tests/redteam/redteam.test.ts",
     "test:py": "node scripts/run-python.js -m pytest services/control-plane/tests",
-    "lint": "npm run --workspaces --if-present lint",
+    "lint": "node scripts/lint.js && npm run --workspaces --if-present lint",
     "format": "prettier --write \"**/*.{ts,js,json,md,yaml,yml}\"",
     "typecheck": "npm run --workspaces --if-present typecheck",
     "db:migrate": "node scripts/run-python.js -m alembic -c services/control-plane/alembic.ini upgrade head",

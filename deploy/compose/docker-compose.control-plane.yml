@@ -22,6 +22,8 @@ services:
     depends_on:
       control-plane:
         condition: service_healthy
+      edge-proxy:
+        condition: service_healthy
     logging:
       driver: awslogs
       options:
@@ -67,7 +69,40 @@ services:
     networks:
       - internal
 
+  # ── Edge Proxy (Subdomain routing, authentication handshake & rate limiter) ───
+  edge-proxy:
+    image: "${ECR_REGISTRY}/capsule/edge-proxy:${IMAGE_TAG}"
+    restart: always
+    environment:
+      PORT: "8080"
+      CONTROL_PLANE_URL: "http://control-plane:8000"
+      PLATFORM_DOMAIN: "${PLATFORM_DOMAIN}"
+      APP_BASE_DOMAIN: "${APP_BASE_DOMAIN}"
+      PLATFORM_ENV: production
+      NODE_ENV: production
+      SANDBOX_DRIVER: gvisor
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/healthz"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    logging:
+      driver: awslogs
+      options:
+        awslogs-group: /capsule/edge-proxy
+        awslogs-region: "${AWS_REGION}"
+        awslogs-stream-prefix: edge
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: "1024M"
+    networks:
+      - internal
+
   # ── Dashboard static file publisher ──────────────────────────────────────
+
   # This is a one-shot init container that copies static files to the shared
   # volume so nginx can serve them directly without a separate dashboard port.
   dashboard-init:

@@ -30,6 +30,9 @@ import { AccessManager, type UserContext } from "./access.js";
 import {
   CapsuleLifecycleManager,
   DevMockSandboxDriver,
+  GVisorDriver,
+  DockerDevDriver,
+  type SandboxDriver,
   type ForwardRequest,
 } from "@capsule/sandbox-driver";
 
@@ -131,10 +134,31 @@ export function createEdgeProxyServer(options?: {
   const config: ProxyConfig = { ...baseConfig, ...(options?.config || {}) };
 
   const accessManager = options?.accessManager || new AccessManager();
+
+  let driver: SandboxDriver;
+  const isProduction =
+    process.env.NODE_ENV === "production" ||
+    process.env.PLATFORM_ENV === "production";
+  const driverType =
+    process.env.SANDBOX_DRIVER || (isProduction ? "gvisor" : "mock");
+
+  if (driverType === "gvisor") {
+    driver = new GVisorDriver();
+  } else if (driverType === "docker") {
+    driver = new DockerDevDriver();
+  } else {
+    if (isProduction && !process.env.ALLOW_DEV_FALLBACK) {
+      throw new Error(
+        "FATAL: Mock sandbox driver is forbidden in production environment. Configure GVisorDriver.",
+      );
+    }
+    driver = new DevMockSandboxDriver();
+  }
+
   const lifecycleManager =
     options?.lifecycleManager ||
     new CapsuleLifecycleManager({
-      driver: new DevMockSandboxDriver(),
+      driver,
     });
 
   const inFlightRequests = new Map<string, Set<() => void>>();
@@ -808,6 +832,22 @@ export function createEdgeProxyServer(options?: {
             metric: "request_timeout_s",
             limit: app.manifest?.limits?.request_timeout_s || 30,
             message: err.message,
+          }),
+        );
+        return;
+      }
+
+      if (
+        err.message?.includes("SANDBOX_UNAVAILABLE") ||
+        err.message?.includes("gVisor runtime is not available") ||
+        err.code === "SANDBOX_UNAVAILABLE"
+      ) {
+        res.writeHead(503, { "Content-Type": "application/json" });
+        res.end(
+          JSON.stringify({
+            error: "SANDBOX_UNAVAILABLE",
+            message: "Production gVisor sandbox runtime is not available.",
+            details: err.message,
           }),
         );
         return;

@@ -1,27 +1,37 @@
 # Agent Capsule Platform
 
 <p align="center">
-  <strong>Secure, multi-tenant application runtime and governance platform for AI-generated and purpose-built micro-applications.</strong>
+  <strong>An agent-built internal tool becomes safely shareable with a colleague in one click.</strong>
 </p>
 
 <p align="center">
   <a href="https://github.com/lakshmikanth823/agent-capsule-platform/actions/workflows/ci.yml">
     <img src="https://github.com/lakshmikanth823/agent-capsule-platform/actions/workflows/ci.yml/badge.svg" alt="CI Pipeline" />
   </a>
-  <img src="https://img.shields.io/badge/tests-351%20passed%20(100%25)-success?style=for-the-badge&logo=vitest" alt="Tests passing" />
-  <img src="https://img.shields.io/badge/typescript-224%20passed-blue?style=for-the-badge&logo=typescript" alt="TypeScript Tests" />
-  <img src="https://img.shields.io/badge/python-100%20passed-blue?style=for-the-badge&logo=python" alt="Python Tests" />
-  <img src="https://img.shields.io/badge/red--team-27%20passed-red?style=for-the-badge&logo=hackthebox" alt="Red-Team Tests" />
-  <img src="https://img.shields.io/badge/sandbox-gVisor%20(runsc)-purple?style=for-the-badge&logo=google" alt="gVisor" />
+  <img src="https://img.shields.io/badge/license-MIT-green?style=flat-square" alt="MIT License" />
+  <img src="https://img.shields.io/badge/node-%3E%3D22.0.0-blue?style=flat-square&logo=node.js" alt="Node.js 22" />
+  <img src="https://img.shields.io/badge/python-3.12%2B-blue?style=flat-square&logo=python" alt="Python 3.12" />
+  <img src="https://img.shields.io/badge/sandbox-gVisor%20(runsc)-purple?style=flat-square&logo=google" alt="gVisor" />
 </p>
 
 ---
 
-## 🌟 Overview
+## ⚡ The Simple Magic
 
-The **Agent Capsule Platform** empowers external AI agents (via Anthropic Claude, Cursor, Antigravity, or custom LLMs) and engineering teams to safely build, publish, share, and operate small, single-purpose web applications—**capsules**—without giving untrusted code access to host infrastructure, cloud credentials, or external networks.
+1. **An AI Agent builds an internal tool** — via Claude, Cursor, Antigravity, or custom agents (`capsule init --template leave-tracker && capsule publish`).
+2. **You click "Share"** — share with a teammate via email or role (`capsule share --app leave-tracker --email teammate@company.com --role employee`).
+3. **Your teammate opens the link and it just works** — instant corporate identity, dedicated isolated database, and zero security risk.
 
-Every capsule executes inside a **hardened user-space sandbox** with its own dedicated SQLite database, isolated subdomain origin, default-deny network egress proxy, centralized AI gateway, and tamper-evident audit logging.
+> 📺 **2-Minute Walkthrough**: See [docs/DEMO_SCRIPT.md](docs/DEMO_SCRIPT.md) for the exact step-by-step demo flow.
+
+### Why this doesn't exist today
+
+When an AI agent writes code for an internal tool (a PTO tracker, an on-call dashboard, a customer look-up utility), **you cannot safely give it to a colleague without days of engineering overhead**:
+
+- If you deploy it to your AWS/cloud, untrusted AI-generated code can exfiltrate IAM credentials, access your production database, or probe internal networks (SSRF).
+- If you host it on traditional PaaS, you have to configure auth, database provisioning, subdomain certificates, and IAM roles yourself.
+
+**Agent Capsule Platform is the runtime layer that makes agent-built software as safe and easy to share as a Google Doc.**
 
 <p align="center">
   <img src="docs/Software_Capsule_Architecture_Diagram.png" alt="Software Capsule Platform Architecture" width="850" />
@@ -63,7 +73,6 @@ Every capsule executes inside a **hardened user-space sandbox** with its own ded
                                                      │   LLMs / Google Sheets    │
                                                      └───────────────────────────┘
 ```
-
 
 ---
 
@@ -306,6 +315,7 @@ Available MCP Tools:
 
 ## 📚 Documentation Index
 
+- **[2-Minute Demo Script](docs/DEMO_SCRIPT.md)** — Step-by-step walkthrough: Agent builds tool → 1-click share → colleague uses it.
 - **[Final Readiness Report](docs/FINAL_READINESS_REPORT.md)** — Comprehensive review across all 12 prompts.
 - **[Requirements Traceability Matrix](docs/TRACEABILITY.md)** — Proof mapping for FR-001 through FR-037.
 - **[Production Runbook](docs/RUNBOOK.md)** — Deployment, backup restore drills, kill switch, monitoring.
