@@ -31,6 +31,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Build monorepo
+        run: npm run build
+
       - name: Run TypeScript tests
         run: npm run test:ts
 
@@ -62,6 +65,7 @@ jobs:
           --health-retries 5
     env:
       DATABASE_URL: postgresql+asyncpg://capsule_user:test_password@localhost:5432/capsule_test
+      SYNC_DATABASE_URL: postgresql://capsule_user:test_password@localhost:5432/capsule_test
       PLATFORM_ENV: test
       AUTH_PROVIDER: mock
       JWT_SIGNING_SECRET: test-jwt-secret
@@ -211,6 +215,7 @@ jobs:
           --health-retries 5
     env:
       DATABASE_URL: postgresql+asyncpg://capsule_user:test_password@localhost:5432/capsule_redteam
+      SYNC_DATABASE_URL: postgresql://capsule_user:test_password@localhost:5432/capsule_redteam
       PLATFORM_ENV: test
       AUTH_PROVIDER: mock
       JWT_SIGNING_SECRET: test-jwt-secret
@@ -238,6 +243,9 @@ jobs:
           python -m venv .venv
           .venv/bin/pip install --upgrade pip
           .venv/bin/pip install -r services/control-plane/requirements.txt
+
+      - name: Build monorepo
+        run: npm run build
 
       - name: Run Alembic migrations
         run: .venv/bin/python -m alembic -c services/control-plane/alembic.ini upgrade head
