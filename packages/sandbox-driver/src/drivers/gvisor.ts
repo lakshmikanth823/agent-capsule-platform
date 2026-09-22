@@ -221,6 +221,12 @@ export class GVisorDriver implements SandboxDriver {
     if (spec.dataDir) {
       await fs.mkdir(spec.dataDir, { recursive: true });
       await fs.mkdir(path.join(spec.dataDir, "blobs"), { recursive: true });
+      try {
+        await fs.chmod(spec.dataDir, 0o777);
+        await fs.chmod(path.join(spec.dataDir, "blobs"), 0o777);
+        const parentDir = path.dirname(spec.dataDir);
+        await fs.chmod(parentDir, 0o777).catch(() => {});
+      } catch {}
     }
 
     const dockerArgs = await this.buildExecutionArgs(spec, instanceId);

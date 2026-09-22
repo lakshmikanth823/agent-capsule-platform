@@ -771,7 +771,9 @@ export function createEdgeProxyServer(options?: {
           hk.toLowerCase() !== "content-security-policy" &&
           hk.toLowerCase() !== "x-frame-options"
         ) {
-          res.setHeader(hk, hv);
+          if (hv !== undefined && hv !== null) {
+            res.setHeader(hk, hv as string | number | readonly string[]);
+          }
         }
       }
       res.writeHead(forwardRes.statusCode);

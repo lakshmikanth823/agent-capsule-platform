@@ -113,6 +113,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Build monorepo
+        run: npm run build
+
       - name: TypeScript typecheck
         run: npm run typecheck
 
@@ -178,15 +181,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
       - name: Build Docker image
         uses: docker/build-push-action@v5
         with:
           context: ${{ matrix.service.context }}
           file: ${{ matrix.service.dockerfile }}
           push: false
+          load: true
           tags: "capsule/${{ matrix.service.name }}:scan-${{ github.sha }}"
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
 
       - name: Scan with Trivy (HIGH + CRITICAL)
         uses: aquasecurity/trivy-action@master

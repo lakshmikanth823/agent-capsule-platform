@@ -51,7 +51,6 @@ export class SQLiteDatabase implements DatabaseClient {
         targetPath = "/data/app.sqlite";
       }
     }
-    this.dbPath = targetPath;
 
     // 2. Determine size limit
     const envMaxSize = process.env.DB_MAX_SIZE_MB
@@ -60,14 +59,30 @@ export class SQLiteDatabase implements DatabaseClient {
     this.maxSizeMb = options.maxSizeMb || envMaxSize || 50;
 
     // 3. Ensure directory exists
-    const dir = path.dirname(this.dbPath);
+    const dir = path.dirname(targetPath);
     if (!fs.existsSync(dir)) {
-      fs.mkdirSync(dir, { recursive: true });
+      try {
+        fs.mkdirSync(dir, { recursive: true });
+      } catch {}
     }
 
-    // 4. Initialize DatabaseSync
+    // 4. Open SQLite database
     const DBClass = getDatabaseSyncClass();
-    this.db = new DBClass(this.dbPath);
+    try {
+      this.db = new DBClass(targetPath);
+      this.dbPath = targetPath;
+    } catch (err: any) {
+      if (
+        (err?.code === "ERR_SQLITE_ERROR" || err?.errcode === 14) &&
+        targetPath.startsWith("/data")
+      ) {
+        const fallbackPath = path.join("/tmp", path.basename(targetPath));
+        this.db = new DBClass(fallbackPath);
+        this.dbPath = fallbackPath;
+      } else {
+        throw err;
+      }
+    }
 
     // 5. Configure SQLite for high concurrency, single-writer safety, and size limits
     this.db.exec("PRAGMA journal_mode = WAL;");
