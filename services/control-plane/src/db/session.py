@@ -38,11 +38,30 @@ AsyncSessionLocal = async_sessionmaker(
 )
 
 # Sync engine for synchronous tasks (e.g. Alembic / direct scripts)
-sync_engine = create_engine(
-    SYNC_DATABASE_URL,
-    echo=False,
-    poolclass=NullPool,
-)
+# Lazily initialized to prevent eager dialect/driver import failures when running async-only tasks
+_sync_engine = None
+
+
+def get_sync_engine():
+    global _sync_engine
+    if _sync_engine is None:
+        _sync_engine = create_engine(
+            SYNC_DATABASE_URL,
+            echo=False,
+            poolclass=NullPool,
+        )
+    return _sync_engine
+
+
+class _LazySyncEngine:
+    def __getattr__(self, name):
+        return getattr(get_sync_engine(), name)
+
+    def __repr__(self):
+        return repr(get_sync_engine())
+
+
+sync_engine = _LazySyncEngine()
 
 
 async def get_db_session() -> AsyncGenerator[AsyncSession, None]:

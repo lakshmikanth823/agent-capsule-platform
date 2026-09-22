@@ -3,6 +3,7 @@ uvicorn>=0.30.0
 pydantic>=2.7.0
 sqlalchemy>=2.0.0
 asyncpg>=0.29.0
+psycopg2-binary>=2.9.9
 alembic>=1.13.0
 jsonschema>=4.22.0
 pyjwt>=2.8.0

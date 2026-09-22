@@ -20,12 +20,12 @@ htmlcov/
 
 # Local Capsule data & storage
 .capsule/
-data/
+/data/
 *.sqlite
 *.sqlite-journal
 *.sqlite-wal
 *.db
-storage/
+/storage/
 
 # Environment and secrets
 .env
