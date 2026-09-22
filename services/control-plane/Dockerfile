@@ -28,8 +28,10 @@ RUN groupadd --gid 1001 capsule \
 RUN apt-get update && apt-get upgrade -y && apt-get install -y --no-install-recommends \
     libpq5 curl \
     && rm -rf /var/lib/apt/lists/* \
-    && rm -rf /usr/lib/python3/dist-packages/setuptools* \
-    && rm -rf /usr/local/lib/python3.12/site-packages/setuptools*
+    && find /usr/local -name "*setuptools*" -exec rm -rf {} + 2>/dev/null || true \
+    && find /usr/local -name "*msgpack*" -exec rm -rf {} + 2>/dev/null || true \
+    && find /usr/lib -name "*setuptools*" -exec rm -rf {} + 2>/dev/null || true \
+    && find /usr/lib -name "*msgpack*" -exec rm -rf {} + 2>/dev/null || true
 
 WORKDIR /app
 

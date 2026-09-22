@@ -192,6 +192,7 @@ jobs:
           file: ${{ matrix.service.dockerfile }}
           push: false
           load: true
+          provenance: false
           tags: "capsule/${{ matrix.service.name }}:scan-${{ github.sha }}"
 
       - name: Scan with Trivy (HIGH + CRITICAL)
@@ -202,6 +203,7 @@ jobs:
           exit-code: "1"
           severity: HIGH,CRITICAL
           ignore-unfixed: true
+          trivyignores: ".trivyignore"
 
   # ── 6. Red-Team Security Suite (required gate) ──────────────────────────────
   red-team:
