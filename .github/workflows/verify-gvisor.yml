@@ -1,0 +1,57 @@
+name: Live gVisor Verification
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "packages/sandbox-driver/**"
+      - "services/sandbox-runner/**"
+      - "tests/redteam/**"
+      - "scripts/verify-gvisor.sh"
+      - ".github/workflows/verify-gvisor.yml"
+
+concurrency:
+  group: gvisor-verify-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: "22"
+
+jobs:
+  verify-gvisor:
+    name: Verify Real gVisor (runsc) Execution
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js ${{ env.NODE_VERSION }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install Node dependencies
+        run: npm ci
+
+      - name: Make verification script executable
+        run: chmod +x scripts/verify-gvisor.sh
+
+      - name: Execute Live gVisor Verification Protocol
+        run: ./scripts/verify-gvisor.sh
+
+      - name: Publish Verification Report to Job Summary
+        if: always()
+        run: |
+          if [ -f docs/GVISOR_VERIFICATION.md ]; then
+            cat docs/GVISOR_VERIFICATION.md >> $GITHUB_STEP_SUMMARY
+          fi
+
+      - name: Upload Verification Report Artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gvisor-verification-report
+          path: docs/GVISOR_VERIFICATION.md
+          if-no-files-found: warn
