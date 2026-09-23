@@ -13,7 +13,7 @@
  * 9. Add a new capability in a later version and get it deployed without approval
  */
 
-import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { describe, it, expect, beforeAll, afterAll, beforeEach } from "vitest";
 import path from "node:path";
 import fs from "node:fs/promises";
 import {
@@ -40,6 +40,7 @@ import { AddressInfo } from "node:net";
 import {
   createSandboxRunnerServer,
   isVpcCidr,
+  timingSafeCompare,
 } from "../../packages/sandbox-driver/src/index.js";
 
 describe("Red-Team Security Test Suite (Prompt 16)", () => {
@@ -559,10 +560,17 @@ describe("Red-Team Security Test Suite (Prompt 16)", () => {
   describe("10. Sandbox Runner Service Attacks (SEC-004 Boundary)", () => {
     let runnerServer: http.Server;
     let runnerPort: number;
+    let driverStartCalls = 0;
     const testSecret = "redteam-runner-secret-key-32chars!";
 
     beforeAll(async () => {
       const mockDriver = new MockSandboxDriver();
+      const origStart = mockDriver.start.bind(mockDriver);
+      mockDriver.start = async (spec) => {
+        driverStartCalls++;
+        return origStart(spec);
+      };
+
       runnerServer = createSandboxRunnerServer({
         driver: mockDriver as any,
         secret: testSecret,
@@ -574,6 +582,10 @@ describe("Red-Team Security Test Suite (Prompt 16)", () => {
           resolve();
         });
       });
+    });
+
+    beforeEach(() => {
+      driverStartCalls = 0;
     });
 
     afterAll(async () => {
@@ -644,9 +656,22 @@ describe("Red-Team Security Test Suite (Prompt 16)", () => {
       expect(res.statusCode).toBe(403);
       expect(res.body.error).toBe("VPC_INGRESS_DENIED");
       expect(res.body.message).toContain("Allowed only from private VPC CIDRs");
+      expect(driverStartCalls).toBe(0);
     });
 
     it("should reject requests with missing or invalid runner shared secret with 401 UNAUTHORIZED", async () => {
+      // Constant-time token verification validation
+      expect(
+        timingSafeCompare("Bearer valid-token", "Bearer valid-token"),
+      ).toBe(true);
+      expect(
+        timingSafeCompare("Bearer valid-token", "Bearer wrong-token"),
+      ).toBe(false);
+      expect(
+        timingSafeCompare("Bearer valid-token", "Bearer valid-token-longer"),
+      ).toBe(false);
+      expect(timingSafeCompare("", "Bearer valid-token")).toBe(false);
+
       // 1. Missing Authorization header
       const missingRes = await makeRunnerRequest({
         path: "/v1/sandboxes/start",
@@ -658,6 +683,7 @@ describe("Red-Team Security Test Suite (Prompt 16)", () => {
       });
       expect(missingRes.statusCode).toBe(401);
       expect(missingRes.body.error).toBe("UNAUTHORIZED");
+      expect(driverStartCalls).toBe(0);
 
       // 2. Wrong bearer token
       const invalidRes = await makeRunnerRequest({
@@ -671,6 +697,7 @@ describe("Red-Team Security Test Suite (Prompt 16)", () => {
       });
       expect(invalidRes.statusCode).toBe(401);
       expect(invalidRes.body.error).toBe("UNAUTHORIZED");
+      expect(driverStartCalls).toBe(0);
     });
 
     it("should reject attempt to use runner API to start a sandbox for an app the caller does not own", async () => {
@@ -699,6 +726,32 @@ describe("Red-Team Security Test Suite (Prompt 16)", () => {
       expect(res.body.message).toContain(
         "Caller from organization 'org_attacker' is forbidden from launching capsule belonging to organization 'org_victim'",
       );
+      expect(driverStartCalls).toBe(0);
+    });
+
+    it("should allow sandbox start when request passes VPC CIDR, bearer secret, and org tenancy checks", async () => {
+      const res = await makeRunnerRequest({
+        path: "/v1/sandboxes/start",
+        method: "POST",
+        headers: {
+          authorization: `Bearer ${testSecret}`,
+          "x-caller-org-id": "org_legit",
+          "x-forwarded-for": "10.0.1.5",
+        },
+        body: {
+          capsuleId: "legit-app",
+          appKey: "legit",
+          versionId: "v1.0.0",
+          organizationId: "org_legit",
+          bundlePath: "/tmp/bundle",
+          dataDir: "/tmp/data",
+        },
+      });
+
+      expect(res.statusCode).toBe(200);
+      expect(res.body.capsuleId).toBe("legit-app");
+      expect(res.body.status).toBe("running");
+      expect(driverStartCalls).toBe(1);
     });
   });
 });

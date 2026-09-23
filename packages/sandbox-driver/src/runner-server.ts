@@ -5,12 +5,24 @@
  * Hosts the SandboxDriver (GVisorDriver in production, DockerDevDriver in dev)
  * and exposes an authenticated internal HTTP interface for Edge Proxy and Control Plane.
  */
+import crypto from "node:crypto";
 import http from "node:http";
 import type {
   SandboxDriver,
   SandboxSpec,
   ForwardRequest,
 } from "./interface.js";
+
+/**
+ * Constant-time string comparison using SHA-256 digests and crypto.timingSafeEqual.
+ * Guarantees fixed 32-byte comparison length regardless of input lengths, preventing timing leaks.
+ */
+export function timingSafeCompare(a: string, b: string): boolean {
+  if (typeof a !== "string" || typeof b !== "string") return false;
+  const hashA = crypto.createHash("sha256").update(a).digest();
+  const hashB = crypto.createHash("sha256").update(b).digest();
+  return crypto.timingSafeEqual(hashA, hashB) && a.length === b.length;
+}
 
 /**
  * Validate whether an IP address belongs to the allowed private VPC CIDRs (10.0.0.0/8, 172.16.0.0/12)
@@ -76,11 +88,11 @@ export function createSandboxRunnerServer(
       return;
     }
 
-    // 2. Authentication check
+    // 2. Authentication check (constant-time token verification)
     if (sharedSecret) {
-      const authHeader = req.headers["authorization"] || "";
+      const authHeader = (req.headers["authorization"] as string) || "";
       const expected = `Bearer ${sharedSecret}`;
-      if (authHeader !== expected) {
+      if (!timingSafeCompare(authHeader, expected)) {
         res.writeHead(401, { "Content-Type": "application/json" });
         res.end(
           JSON.stringify({
