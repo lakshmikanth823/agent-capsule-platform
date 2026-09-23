@@ -86,6 +86,7 @@ describe("Edge Proxy Service", () => {
   function makeRequest(options: {
     host: string;
     path: string;
+    port?: number;
     method?: string;
     headers?: Record<string, string>;
     body?: string;
@@ -98,7 +99,7 @@ describe("Edge Proxy Service", () => {
       const req = http.request(
         {
           hostname: "127.0.0.1",
-          port: serverPort,
+          port: options.port ?? serverPort,
           path: options.path,
           method: options.method || "GET",
           headers: {
@@ -341,6 +342,96 @@ describe("Edge Proxy Service", () => {
     );
     expect(verifyJwt(expiredToken, keys)).toBeNull();
   });
+
+  it("returns HTTP 503 SANDBOX_UNAVAILABLE when sandbox runtime is not configured in daemon", async () => {
+    const unavailDriver = {
+      name: "gvisor",
+      async isAvailable() {
+        return false;
+      },
+      async start() {
+        const err = new Error(
+          "[GVisorDriver] gVisor runtime 'runsc' is not configured in Docker daemon. Install gVisor runsc (https://gvisor.dev/docs/user_guide/install/) and register it in /etc/docker/daemon.json, or set ALLOW_DEV_FALLBACK=1 for local development testing.",
+        );
+        (err as any).code = "SANDBOX_UNAVAILABLE";
+        throw err;
+      },
+      async stop() {},
+      async getLogs() {
+        return [];
+      },
+      async forward() {
+        return { status: 500, headers: {}, body: "" };
+      },
+    };
+
+    const unavailLifecycle = new CapsuleLifecycleManager({
+      driver: unavailDriver as any,
+    });
+    const testAccess = new AccessManager();
+    testAccess.registerApp({
+      id: "app-unavail",
+      appKey: "unavail-app",
+      name: "Unavailable App",
+      organizationId: "org_acme",
+      status: "active",
+      manifest: { id: "unavail-app", roles: ["user"] },
+    });
+
+    const unavailServer = createEdgeProxyServer({
+      config: {
+        appDomain: "apps.localhost",
+        dashboardDomain: "platform.localhost",
+        port: 0,
+        controlPlaneUrl: "http://127.0.0.1:8000",
+        sessionSecret: "dev-session-secret-change-in-production-32-chars!",
+        activeKeyId: "key-2026-09",
+        signingKeys: {
+          "key-2026-09": "dev-identity-secret-key-must-be-32-bytes-long!",
+        },
+        isProduction: false,
+      },
+      accessManager: testAccess,
+      lifecycleManager: unavailLifecycle,
+    });
+
+    await new Promise<void>((resolve) => unavailServer.listen(0, resolve));
+    const unavailPort = (unavailServer.address() as AddressInfo).port;
+
+    try {
+      const ticketRes = await makeRequest({
+        port: unavailPort,
+        host: `platform.localhost:${unavailPort}`,
+        path: `/auth/ticket?user=alice&target_app=unavail-app&return_to=http://unavail-app.apps.localhost:${unavailPort}/auth/callback`,
+      });
+      const callbackUrl = new URL(ticketRes.headers.location || "");
+      const ticket = callbackUrl.searchParams.get("ticket");
+
+      const callbackRes = await makeRequest({
+        port: unavailPort,
+        host: `unavail-app.apps.localhost:${unavailPort}`,
+        path: `/auth/callback?ticket=${ticket}&return_to=/`,
+      });
+      const cookie =
+        callbackRes.headers["set-cookie"]?.[0]?.split(";")[0] || "";
+
+      const appRes = await makeRequest({
+        port: unavailPort,
+        host: `unavail-app.apps.localhost:${unavailPort}`,
+        path: "/",
+        headers: { cookie },
+      });
+
+      expect(appRes.statusCode).toBe(503);
+      const body = JSON.parse(appRes.body);
+      expect(body.error).toBe("SANDBOX_UNAVAILABLE");
+      expect(body.message).toContain(
+        "Production gVisor sandbox runtime is not available",
+      );
+    } finally {
+      await new Promise((resolve) => unavailServer.close(resolve));
+    }
+  });
 });
 
 describe.skipIf(!hasDocker)(
@@ -400,6 +491,7 @@ describe.skipIf(!hasDocker)(
     function makeRequest(options: {
       host: string;
       path: string;
+      port?: number;
       method?: string;
       headers?: Record<string, string>;
       body?: string;
@@ -412,7 +504,7 @@ describe.skipIf(!hasDocker)(
         const req = http.request(
           {
             hostname: "127.0.0.1",
-            port: serverPort,
+            port: options.port ?? serverPort,
             path: options.path,
             method: options.method || "GET",
             headers: {
@@ -488,92 +580,5 @@ describe.skipIf(!hasDocker)(
       expect(htmlRes.headers["x-frame-options"]).toBe("DENY");
       expect(htmlRes.body).toContain("Leave Tracker Capsule");
     }, 45000);
-
-    it("returns HTTP 503 SANDBOX_UNAVAILABLE when sandbox runtime is not configured in daemon", async () => {
-      const unavailDriver = {
-        name: "gvisor",
-        async isAvailable() {
-          return false;
-        },
-        async start() {
-          const err = new Error(
-            "[GVisorDriver] gVisor runtime 'runsc' is not configured in Docker daemon. Install gVisor runsc (https://gvisor.dev/docs/user_guide/install/) and register it in /etc/docker/daemon.json, or set ALLOW_DEV_FALLBACK=1 for local development testing.",
-          );
-          (err as any).code = "SANDBOX_UNAVAILABLE";
-          throw err;
-        },
-        async stop() {},
-        async getLogs() {
-          return [];
-        },
-        async forward() {
-          return { status: 500, headers: {}, body: "" };
-        },
-      };
-
-      const unavailLifecycle = new CapsuleLifecycleManager({
-        driver: unavailDriver as any,
-      });
-      const testAccess = new AccessManager();
-      testAccess.registerApp({
-        id: "app-unavail",
-        appKey: "unavail-app",
-        name: "Unavailable App",
-        organizationId: "org_acme",
-        status: "active",
-        manifest: { id: "unavail-app", roles: ["user"] },
-      });
-
-      const unavailServer = createEdgeProxyServer({
-        config: {
-          appDomain: "apps.localhost",
-          dashboardDomain: "platform.localhost",
-          port: 0,
-          controlPlaneUrl: "http://127.0.0.1:8000",
-          sessionSecret: "dev-session-secret-change-in-production-32-chars!",
-          activeKeyId: "key-2026-09",
-          signingKeys: {
-            "key-2026-09": "dev-identity-secret-key-must-be-32-bytes-long!",
-          },
-          isProduction: false,
-        },
-        accessManager: testAccess,
-        lifecycleManager: unavailLifecycle,
-      });
-
-      await new Promise<void>((resolve) => unavailServer.listen(0, resolve));
-      const unavailPort = (unavailServer.address() as AddressInfo).port;
-
-      try {
-        const ticketRes = await makeRequest({
-          host: `platform.localhost:${unavailPort}`,
-          path: `/auth/ticket?user=alice&target_app=unavail-app&return_to=http://unavail-app.apps.localhost:${unavailPort}/auth/callback`,
-        });
-        const callbackUrl = new URL(ticketRes.headers.location || "");
-        const ticket = callbackUrl.searchParams.get("ticket");
-
-        const callbackRes = await makeRequest({
-          host: `unavail-app.apps.localhost:${unavailPort}`,
-          path: `/auth/callback?ticket=${ticket}&return_to=/`,
-        });
-        const cookie =
-          callbackRes.headers["set-cookie"]?.[0]?.split(";")[0] || "";
-
-        const appRes = await makeRequest({
-          host: `unavail-app.apps.localhost:${unavailPort}`,
-          path: "/",
-          headers: { cookie },
-        });
-
-        expect(appRes.statusCode).toBe(503);
-        const body = JSON.parse(appRes.body);
-        expect(body.error).toBe("SANDBOX_UNAVAILABLE");
-        expect(body.message).toContain(
-          "Production gVisor sandbox runtime is not available",
-        );
-      } finally {
-        await new Promise((resolve) => unavailServer.close(resolve));
-      }
-    });
   },
 );

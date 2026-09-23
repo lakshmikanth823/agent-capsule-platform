@@ -207,7 +207,7 @@ npm run build
 ### 5. Run Verification Suites
 
 ```bash
-# Run all TypeScript workspace tests (234 tests: 211 passed, 23 skipped)
+# Run all TypeScript workspace tests (234 tests: 212 passed, 22 skipped)
 npm run test:ts
 
 # Run all Python control plane tests (100 tests)
@@ -318,7 +318,7 @@ Available MCP Tools:
 
 | Layer                        | Environment             | What is Verified                                                                                                                                                                                              | Status                                                                                                           |
 | :--------------------------- | :---------------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | :--------------------------------------------------------------------------------------------------------------- |
-| **Core CI Pipeline**         | GitHub Actions (Ubuntu) | Topological build, manifest linting, Prettier formatting, TypeScript typecheck, 234 TS tests (211 passed, 23 skipped), 100 Python tests against live PostgreSQL, 27 Red-Team attacks, 6 Trivy container scans | ✅ **100% Green** ([CI Run](https://github.com/lakshmikanth823/agent-capsule-platform/actions/workflows/ci.yml)) |
+| **Core CI Pipeline**         | GitHub Actions (Ubuntu) | Topological build, manifest linting, Prettier formatting, TypeScript typecheck, 234 TS tests (212 passed, 22 skipped), 100 Python tests against live PostgreSQL, 27 Red-Team attacks, 6 Trivy container scans | ✅ **100% Green** ([CI Run](https://github.com/lakshmikanth823/agent-capsule-platform/actions/workflows/ci.yml)) |
 | **Proxy Flow Simulation**    | Local / CI              | Subdomain routing, ticket authentication handshake, signed identity injection (`x-capsule-identity`), share-based RBAC, and SQLite data isolation                                                             | ✅ **Verified** (`proxy-leave-tracker-flow.test.ts`)                                                             |
 | **Cloud Staging Deployment** | AWS (EC2 + ECR)         | Automated OIDC authentication, container build & push, SSH deployment to staging host, `/healthz` validation                                                                                                  | 🟡 **Pipeline Ready** (Awaiting target AWS account credentials & dedicated gVisor EC2 host)                      |
 
