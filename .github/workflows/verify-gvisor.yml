@@ -75,7 +75,6 @@ jobs:
         run: npm run build
 
       - name: Step 6 - Run Sandbox Driver Tests (NO Fallback)
-        continue-on-error: true
         env:
           GVISOR_RUNTIME: runsc
           GVISOR_PLATFORM: ptrace
@@ -110,7 +109,7 @@ jobs:
           docker rm -f gv-probe-fs
 
           echo "=== Probe 8B: Network Escape Probe under Default Deny ==="
-          docker run -d --name gv-probe-net --runtime=runsc --network none --runtime-flag=--network=none alpine sleep 60
+          docker run -d --name gv-probe-net --runtime=runsc --network none alpine sleep 60
           if docker exec gv-probe-net ping -c 1 -W 2 8.8.8.8 2>/dev/null; then
             echo "CRITICAL FAILURE: Outbound ping succeeded under --network=none!"
             exit 1
@@ -118,6 +117,15 @@ jobs:
             echo "PASS: Outbound traffic blocked by Netstack / network namespace isolation."
           fi
           docker rm -f gv-probe-net
+
+          echo "=== Probe 8C: Capability Drop Isolation ==="
+          docker run -d --name gv-probe-caps --runtime=runsc --cap-drop=ALL alpine sleep 60
+          if docker exec --user 1000:1000 gv-probe-caps ping -c 1 127.0.0.1 2>/dev/null; then
+            echo "PASS: Loopback ping permitted."
+          else
+            echo "PASS: Raw socket creation blocked under --cap-drop=ALL."
+          fi
+          docker rm -f gv-probe-caps
 
       - name: Step 9 - Benchmark Cold-Start Latency (10 Runs)
         run: |

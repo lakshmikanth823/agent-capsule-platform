@@ -71,11 +71,16 @@ export class GVisorDriver implements SandboxDriver {
         "{{json .Runtimes}}",
       ]);
       const runtimes = JSON.parse(stdout.trim() || "{}");
-      return (
-        Boolean(runtimes[this.runtimeName]) ||
-        Boolean(runtimes["runsc"]) ||
+      if (runtimes[this.runtimeName]) {
+        return true;
+      }
+      if (
+        this.runtimeName === "runsc" &&
         Boolean(runtimes["io.containerd.runsc.v1"])
-      );
+      ) {
+        return true;
+      }
+      return false;
     } catch {
       return false;
     }
@@ -281,18 +286,17 @@ export class GVisorDriver implements SandboxDriver {
       if (rtIndex !== -1) {
         dockerArgs.splice(rtIndex, 2);
       }
-      const flagIndices = dockerArgs
-        .map((arg, idx) => (arg.startsWith("--runtime-flag") ? idx : -1))
-        .filter((idx) => idx !== -1)
-        .reverse();
-      for (const idx of flagIndices) {
-        dockerArgs.splice(idx, 1);
-      }
     }
+
+    // Filter out --runtime-flag arguments before invoking docker CLI,
+    // as Docker CLI does not accept --runtime-flag (runsc runtime flags are set in daemon.json).
+    const cliDockerArgs = dockerArgs.filter(
+      (arg) => !arg.startsWith("--runtime-flag"),
+    );
 
     const startTimestamp = Date.now();
     try {
-      await execFileAsync("docker", dockerArgs);
+      await execFileAsync("docker", cliDockerArgs);
 
       const now = new Date();
       const instance: SandboxInstance = {
