@@ -12,10 +12,32 @@ import type {
   ForwardRequest,
 } from "./interface.js";
 
+/**
+ * Validate whether an IP address belongs to the allowed private VPC CIDRs (10.0.0.0/8, 172.16.0.0/12)
+ * or local loopback interfaces. Rejects public internet IPs and non-VPC traffic.
+ */
+export function isVpcCidr(ip: string): boolean {
+  if (!ip) return false;
+  const cleanIp = ip.replace(/^::ffff:/, "").trim();
+  if (cleanIp === "127.0.0.1" || cleanIp === "::1" || cleanIp === "localhost") {
+    return true;
+  }
+  const parts = cleanIp.split(".").map(Number);
+  if (parts.length !== 4 || parts.some((n) => isNaN(n) || n < 0 || n > 255)) {
+    return false;
+  }
+  // 10.0.0.0/8
+  if (parts[0] === 10) return true;
+  // 172.16.0.0/12 (172.16.0.0 - 172.31.255.255)
+  if (parts[0] === 172 && parts[1] >= 16 && parts[1] <= 31) return true;
+  return false;
+}
+
 export interface SandboxRunnerServerOptions {
   driver: SandboxDriver;
   secret?: string;
   port?: number;
+  enforceVpcOnly?: boolean;
 }
 
 export function createSandboxRunnerServer(
@@ -25,6 +47,22 @@ export function createSandboxRunnerServer(
   const sharedSecret = options.secret || process.env.RUNNER_SHARED_SECRET;
 
   const server = http.createServer(async (req, res) => {
+    // 0. Ingress Network Boundary Check: Enforce VPC CIDR access (defense-in-depth behind UFW)
+    const rawIp =
+      (req.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim() ||
+      req.socket.remoteAddress ||
+      "";
+    if (options.enforceVpcOnly && !isVpcCidr(rawIp)) {
+      res.writeHead(403, { "Content-Type": "application/json" });
+      res.end(
+        JSON.stringify({
+          error: "VPC_INGRESS_DENIED",
+          message: `Access to sandbox runner port 8095 from non-VPC IP '${rawIp}' is prohibited. Allowed only from private VPC CIDRs (10.0.0.0/8, 172.16.0.0/12).`,
+        }),
+      );
+      return;
+    }
+
     // 1. Healthcheck (no auth required for container orchestrators / ALBs)
     if (req.url === "/healthz" && req.method === "GET") {
       res.writeHead(200, { "Content-Type": "application/json" });
@@ -80,6 +118,21 @@ export function createSandboxRunnerServer(
       // POST /v1/sandboxes/start
       if (pathname === "/v1/sandboxes/start" && req.method === "POST") {
         const spec: SandboxSpec = await readBody();
+        // Multi-tenant authorization guard: caller organization must match app's owning organization
+        const callerOrg =
+          (req.headers["x-caller-org-id"] as string) ||
+          (spec as any).callerOrgId;
+        const appOwnerOrg = (spec as any).organizationId || (spec as any).orgId;
+        if (callerOrg && appOwnerOrg && callerOrg !== appOwnerOrg) {
+          res.writeHead(403, { "Content-Type": "application/json" });
+          res.end(
+            JSON.stringify({
+              error: "CROSS_TENANT_ACCESS_DENIED",
+              message: `Caller from organization '${callerOrg}' is forbidden from launching capsule belonging to organization '${appOwnerOrg}'.`,
+            }),
+          );
+          return;
+        }
         const instance = await driver.start(spec);
         res.writeHead(200, { "Content-Type": "application/json" });
         res.end(JSON.stringify(instance));

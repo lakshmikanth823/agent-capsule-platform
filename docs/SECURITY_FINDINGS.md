@@ -76,6 +76,23 @@ A deliberately malicious test application (`examples/malicious-app`) and an auto
 
 ---
 
+### Finding SEC-004: Public-Facing Edge Proxy Mounted Host Docker Socket (Root-Equivalent Host Takeover Risk)
+
+- **Severity**: **CRITICAL** (CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:C/C:H/I:H/A:H — Base Score: 9.8)
+- **Date Discovered**: 2026-09-23
+- **Status**: **RESOLVED / CLOSED** (Fix Commits: [`0392158`](https://github.com/lakshmikanth823/agent-capsule-platform/commit/0392158), [`eba1bd1`](https://github.com/lakshmikanth823/agent-capsule-platform/commit/eba1bd1))
+- **Component**: `services/edge-proxy/Dockerfile`, `deploy/compose/docker-compose.control-plane.yml`
+- **Description & Root Cause**:  
+  In earlier iterations, `services/edge-proxy/Dockerfile` installed `docker.io`, added user `capsule` to the host `docker` group, and mounted `/var/run/docker.sock` into the container so the proxy could locally manage sandbox lifecycles.
+  Because `edge-proxy` directly faces the public internet (handling incoming HTTPS requests, ticket exchanges, and subdomain routing), exposing `/var/run/docker.sock` created a critical security flaw: any RCE vulnerability in `edge-proxy` would grant the attacker root-equivalent access to the control-plane host. An attacker could issue Docker API commands to mount the host root filesystem (`docker run -v /:/host`), exfiltrate database credentials, or compromise the control plane. Additionally, `runsc` was only provisioned on the dedicated `sandbox-host`, meaning sandboxes launched by the control-plane host could not run under gVisor.
+- **Remediation**:
+  1. **Complete Removal of Docker Socket**: Removed `/var/run/docker.sock` and `docker.io` from `services/edge-proxy`. The proxy runs as an unprivileged network process with zero Docker privileges.
+  2. **Dedicated Private Sandbox Runner**: Created `services/sandbox-runner` deployed exclusively on the private `sandbox-host` runner where `runsc` is installed.
+  3. **Authenticated Private RPC**: Built `RemoteSandboxDriver` which calls `sandbox-runner` over internal VPC LAN on TCP port 8095 using bearer token authentication (`RUNNER_SHARED_SECRET`), with secrets dynamically retrieved from AWS Secrets Manager via `entrypoint-node.sh`.
+  4. **Strict Firewall Isolation**: Port 8095 is restricted to private VPC CIDRs (`10.0.0.0/8`, `172.16.0.0/12`) via UFW firewall rules and application-layer validation, dropping all external traffic.
+
+---
+
 ## Test Execution Details
 
 ### Automated Test Output

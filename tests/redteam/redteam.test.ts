@@ -35,6 +35,12 @@ import { DockerDevDriver } from "../../packages/sandbox-driver/src/drivers/docke
 import { GVisorDriver } from "../../packages/sandbox-driver/src/drivers/gvisor.js";
 import { MockSandboxDriver } from "../../packages/sandbox-driver/src/drivers/mock.js";
 import { createDefaultSandboxDriver } from "../../packages/sandbox-driver/src/lifecycle.js";
+import http from "node:http";
+import { AddressInfo } from "node:net";
+import {
+  createSandboxRunnerServer,
+  isVpcCidr,
+} from "../../packages/sandbox-driver/src/index.js";
 
 describe("Red-Team Security Test Suite (Prompt 16)", () => {
   const TEST_DIR = path.resolve(process.cwd(), ".capsule-redteam-test");
@@ -544,6 +550,155 @@ describe("Red-Team Security Test Suite (Prompt 16)", () => {
       expect(hasNewAi).toBe(true);
       expect(hasNewConnector).toBe(true);
       // Publish credentials cannot self-approve escalation (Security Invariant)
+    });
+  });
+
+  // =========================================================================
+  // 10. SANDBOX RUNNER SERVICE ATTACKS (SEC-004 BOUNDARY)
+  // =========================================================================
+  describe("10. Sandbox Runner Service Attacks (SEC-004 Boundary)", () => {
+    let runnerServer: http.Server;
+    let runnerPort: number;
+    const testSecret = "redteam-runner-secret-key-32chars!";
+
+    beforeAll(async () => {
+      const mockDriver = new MockSandboxDriver();
+      runnerServer = createSandboxRunnerServer({
+        driver: mockDriver as any,
+        secret: testSecret,
+        enforceVpcOnly: true,
+      });
+      await new Promise<void>((resolve) => {
+        runnerServer.listen(0, "127.0.0.1", () => {
+          runnerPort = (runnerServer.address() as AddressInfo).port;
+          resolve();
+        });
+      });
+    });
+
+    afterAll(async () => {
+      if (runnerServer) {
+        await new Promise((resolve) => runnerServer.close(resolve));
+      }
+    });
+
+    function makeRunnerRequest(opts: {
+      path: string;
+      method?: string;
+      headers?: Record<string, string>;
+      body?: any;
+    }): Promise<{ statusCode: number; body: any }> {
+      return new Promise((resolve, reject) => {
+        const req = http.request(
+          {
+            hostname: "127.0.0.1",
+            port: runnerPort,
+            path: opts.path,
+            method: opts.method || "GET",
+            headers: {
+              "Content-Type": "application/json",
+              ...(opts.headers || {}),
+            },
+          },
+          (res) => {
+            let data = "";
+            res.on("data", (chunk) => (data += chunk));
+            res.on("end", () => {
+              let parsed: any = data;
+              try {
+                parsed = JSON.parse(data);
+              } catch {}
+              resolve({ statusCode: res.statusCode || 0, body: parsed });
+            });
+          },
+        );
+        req.on("error", reject);
+        if (opts.body) {
+          req.write(
+            typeof opts.body === "string"
+              ? opts.body
+              : JSON.stringify(opts.body),
+          );
+        }
+        req.end();
+      });
+    }
+
+    it("should reject connection attempts to port 8095 originating from outside the VPC CIDR", async () => {
+      // 1. Direct validation of VPC CIDR logic
+      expect(isVpcCidr("10.0.1.5")).toBe(true); // AWS VPC 10.0.0.0/8
+      expect(isVpcCidr("172.16.10.20")).toBe(true); // AWS VPC 172.16.0.0/12
+      expect(isVpcCidr("127.0.0.1")).toBe(true); // Local loopback
+      expect(isVpcCidr("203.0.113.195")).toBe(false); // Public internet IP
+      expect(isVpcCidr("8.8.8.8")).toBe(false); // Public internet IP
+      expect(isVpcCidr("192.168.1.1")).toBe(false); // Non-VPC local subnet
+
+      // 2. HTTP request from non-VPC origin rejected with 403 VPC_INGRESS_DENIED
+      const res = await makeRunnerRequest({
+        path: "/healthz",
+        headers: {
+          "x-forwarded-for": "203.0.113.195",
+        },
+      });
+
+      expect(res.statusCode).toBe(403);
+      expect(res.body.error).toBe("VPC_INGRESS_DENIED");
+      expect(res.body.message).toContain("Allowed only from private VPC CIDRs");
+    });
+
+    it("should reject requests with missing or invalid runner shared secret with 401 UNAUTHORIZED", async () => {
+      // 1. Missing Authorization header
+      const missingRes = await makeRunnerRequest({
+        path: "/v1/sandboxes/start",
+        method: "POST",
+        headers: {
+          "x-forwarded-for": "10.0.1.5",
+        },
+        body: { capsuleId: "test-app", appKey: "test", versionId: "v1" },
+      });
+      expect(missingRes.statusCode).toBe(401);
+      expect(missingRes.body.error).toBe("UNAUTHORIZED");
+
+      // 2. Wrong bearer token
+      const invalidRes = await makeRunnerRequest({
+        path: "/v1/sandboxes/start",
+        method: "POST",
+        headers: {
+          authorization: "Bearer wrong-secret-token",
+          "x-forwarded-for": "10.0.1.5",
+        },
+        body: { capsuleId: "test-app", appKey: "test", versionId: "v1" },
+      });
+      expect(invalidRes.statusCode).toBe(401);
+      expect(invalidRes.body.error).toBe("UNAUTHORIZED");
+    });
+
+    it("should reject attempt to use runner API to start a sandbox for an app the caller does not own", async () => {
+      // Caller identity: org_attacker
+      // Target capsule ownership: org_victim
+      const res = await makeRunnerRequest({
+        path: "/v1/sandboxes/start",
+        method: "POST",
+        headers: {
+          authorization: `Bearer ${testSecret}`,
+          "x-caller-org-id": "org_attacker",
+          "x-forwarded-for": "10.0.1.5",
+        },
+        body: {
+          capsuleId: "confidential-leave-tracker",
+          appKey: "leave-tracker",
+          versionId: "v1.0.0",
+          organizationId: "org_victim", // Owned by victim org!
+          bundlePath: "/tmp/bundle",
+          dataDir: "/tmp/data",
+        },
+      });
+
+      expect(res.statusCode).toBe(403);
+      expect(res.body.error).toBe("CROSS_TENANT_ACCESS_DENIED");
+      expect(res.body.message).toContain(
+        "Caller from organization 'org_attacker' is forbidden from launching capsule belonging to organization 'org_victim'",
+      );
     });
   });
 });
