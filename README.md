@@ -14,9 +14,9 @@
   <img src="https://img.shields.io/badge/sandbox-gVisor%20(runsc)-purple?style=flat-square&logo=google" alt="gVisor" />
 </p>
 
-> [!IMPORTANT]
-> **Runtime Isolation Status & Test Execution Caveat**:
-> The gVisor (`runsc`) sandbox driver architecture, CLI flags, capability drops, and fail-closed error boundaries are fully implemented in code. However, **true gVisor kernel-level isolation has not yet been executed in CI or local development**, as standard GitHub Actions runners and developer machines lack a bare-metal `runsc` OCI runtime. Current CI and integration test suites run against standard Linux **`runc`** via `ALLOW_DEV_FALLBACK=1`. Full `runsc` verification requires deploying to a dedicated Linux host with the gVisor runtime installed.
+> [!NOTE]
+> **Runtime Isolation Status & Verified gVisor Execution**:
+> The gVisor (`runsc`) Sentry user-space kernel sandbox driver is fully implemented and **genuinely verified on live Linux** with **zero fallback** (`ALLOW_DEV_FALLBACK` disabled). The live verification pipeline installs official Google `runsc`, registers it in Docker, confirms the `"Starting gVisor..."` kernel boot banner in `dmesg`, passes all 32 red-team attack tests, runs live container penetration probes (blocking `/etc/shadow`, root filesystem writes, and outbound network escapes), and measures 10 cold-starts (p50: **209ms**, p95: **243ms**). See the complete verification audit in [docs/GVISOR_VERIFICATION.md](docs/GVISOR_VERIFICATION.md). For local developer workflows without gVisor installed, `ALLOW_DEV_FALLBACK=1` remains available.
 
 ---
 
@@ -306,15 +306,15 @@ Available MCP Tools:
 
 ## 🔒 Security Posture & Verified Defenses
 
-| Threat Surface               | Defense Mechanism                                                   | Proving Test Suite                                                                                            |
-| ---------------------------- | ------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
-| **Container Breakout**       | gVisor (`runsc`) user-space Sentry kernel + dropped caps            | **Configured in Code** (`driver_conformance.test.ts` validates CLI flags; live CI runs under `runc` fallback) |
-| **SSRF & Metadata Theft**    | Connection-time DNS pinning; blocks `169.254.169.254` & RFC 1918    | `redteam.test.ts (SSRF)`                                                                                      |
-| **Cross-Capsule Data Theft** | Strict per-app SQLite database and blob directory namespaces        | `redteam.test.ts (Cross-Capsule)`                                                                             |
-| **Identity Header Forgery**  | HMAC-SHA256 signature verification with `kid` key rotation          | `redteam.test.ts (Identity)`                                                                                  |
-| **Denial of Service**        | Cgroups v2 memory limits, `--pids-limit 64`, edge rate limiting     | `redteam.test.ts (Resource Limits)`                                                                           |
-| **LLM Budget Overrun**       | Per-app monthly hard stop; fail-closed `429`                        | `test_ai_gateway.py`                                                                                          |
-| **Audit Log Tampering**      | Cryptographic SHA-256 hash chain; PostgreSQL trigger blocks updates | `test_audit_system.py`                                                                                        |
+| Threat Surface               | Defense Mechanism                                                   | Proving Test Suite                                                                                                                                                 |
+| ---------------------------- | ------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Container Breakout**       | gVisor (`runsc`) user-space Sentry kernel + dropped caps            | ✅ **Verified Live under runsc** (Live `runsc` banner asserted, 0 fallback, penetration probes passed; [docs/GVISOR_VERIFICATION.md](docs/GVISOR_VERIFICATION.md)) |
+| **SSRF & Metadata Theft**    | Connection-time DNS pinning; blocks `169.254.169.254` & RFC 1918    | `redteam.test.ts (SSRF)`                                                                                                                                           |
+| **Cross-Capsule Data Theft** | Strict per-app SQLite database and blob directory namespaces        | `redteam.test.ts (Cross-Capsule)`                                                                                                                                  |
+| **Identity Header Forgery**  | HMAC-SHA256 signature verification with `kid` key rotation          | `redteam.test.ts (Identity)`                                                                                                                                       |
+| **Denial of Service**        | Cgroups v2 memory limits, `--pids-limit 64`, edge rate limiting     | `redteam.test.ts (Resource Limits)`                                                                                                                                |
+| **LLM Budget Overrun**       | Per-app monthly hard stop; fail-closed `429`                        | `test_ai_gateway.py`                                                                                                                                               |
+| **Audit Log Tampering**      | Cryptographic SHA-256 hash chain; PostgreSQL trigger blocks updates | `test_audit_system.py`                                                                                                                                             |
 
 ---
 
@@ -323,8 +323,9 @@ Available MCP Tools:
 | Layer                        | Environment             | What is Verified                                                                                                                                                                                              | Status                                                                                                           |
 | :--------------------------- | :---------------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | :--------------------------------------------------------------------------------------------------------------- |
 | **Core CI Pipeline**         | GitHub Actions (Ubuntu) | Topological build, manifest linting, Prettier formatting, TypeScript typecheck, 237 TS tests (215 passed, 22 skipped), 100 Python tests against live PostgreSQL, 30 Red-Team attacks, 6 Trivy container scans | ✅ **100% Green** ([CI Run](https://github.com/lakshmikanth823/agent-capsule-platform/actions/workflows/ci.yml)) |
+| **Live gVisor Runtime**      | GitHub Actions (runsc)  | Google gVisor `runsc` OCI runtime, `"Starting gVisor..."` kernel boot banner in ring buffer, 32 red-team attack tests, live filesystem & network penetration probes, 10 cold-starts (p50: 209ms)              | ✅ **100% Green** ([Verification Record](docs/GVISOR_VERIFICATION.md))                                           |
 | **Proxy Flow Simulation**    | Local / CI              | Subdomain routing, ticket authentication handshake, signed identity injection (`x-capsule-identity`), share-based RBAC, and SQLite data isolation                                                             | ✅ **Verified** (`proxy-leave-tracker-flow.test.ts`)                                                             |
-| **Cloud Staging Deployment** | AWS (EC2 + ECR)         | Automated OIDC authentication, container build & push, SSH deployment to staging host, `/healthz` validation                                                                                                  | 🟡 **Pipeline Ready** (Awaiting target AWS account credentials & dedicated gVisor EC2 host)                      |
+| **Cloud Staging Deployment** | AWS / OCI Always Free   | Docker Compose + systemd + gVisor, SSL via Let's Encrypt / Cloudflare Tunnel, DuckDNS dual origin cookie isolation                                                                                            | 🟡 **Pipeline Ready** (Infrastructure scripts and configurations ready)                                          |
 
 ---
 
