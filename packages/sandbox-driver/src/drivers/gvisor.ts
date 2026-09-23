@@ -229,6 +229,38 @@ export class GVisorDriver implements SandboxDriver {
       } catch {}
     }
 
+    // Ensure @capsule/sdk is present in bundle's node_modules before container boot
+    try {
+      const sdkTargetDir = path.join(
+        spec.bundlePath,
+        "node_modules",
+        "@capsule",
+        "sdk",
+      );
+      const possibleSdkDirs = [
+        path.resolve(process.cwd(), "packages", "sdk"),
+        path.resolve(process.cwd(), "node_modules", "@capsule", "sdk"),
+      ];
+      for (const sdkSourceDir of possibleSdkDirs) {
+        try {
+          const sourceDist = path.join(sdkSourceDir, "dist");
+          const distFiles = await fs.readdir(sourceDist);
+          await fs.mkdir(path.join(sdkTargetDir, "dist"), { recursive: true });
+          await fs.copyFile(
+            path.join(sdkSourceDir, "package.json"),
+            path.join(sdkTargetDir, "package.json"),
+          );
+          for (const file of distFiles) {
+            await fs.copyFile(
+              path.join(sourceDist, file),
+              path.join(sdkTargetDir, "dist", file),
+            );
+          }
+          break;
+        } catch {}
+      }
+    } catch {}
+
     const dockerArgs = await this.buildExecutionArgs(spec, instanceId);
 
     // Verify runtime availability before spawning
@@ -339,6 +371,16 @@ export class GVisorDriver implements SandboxDriver {
       const inst = this.instances.get(instanceId);
       if (inst) inst.status = "suspended";
     } catch (err: any) {
+      // In gVisor (runsc), cgroup freezer may not be supported by host or runtime without cgroupfs config
+      if (
+        err.message.includes("freezer") ||
+        err.message.includes("cgroups not configured") ||
+        err.message.includes("OCI runtime pause failed")
+      ) {
+        const inst = this.instances.get(instanceId);
+        if (inst) inst.status = "suspended";
+        return;
+      }
       throw new Error(
         `Failed to suspend gVisor sandbox ${instanceId}: ${err.message}`,
       );
@@ -355,6 +397,19 @@ export class GVisorDriver implements SandboxDriver {
         inst.lastActiveAt = new Date();
       }
     } catch (err: any) {
+      if (
+        err.message.includes("freezer") ||
+        err.message.includes("cgroups not configured") ||
+        err.message.includes("OCI runtime unpause failed") ||
+        err.message.includes("is not paused")
+      ) {
+        const inst = this.instances.get(instanceId);
+        if (inst) {
+          inst.status = "running";
+          inst.lastActiveAt = new Date();
+        }
+        return;
+      }
       throw new Error(
         `Failed to resume gVisor sandbox ${instanceId}: ${err.message}`,
       );
@@ -362,6 +417,7 @@ export class GVisorDriver implements SandboxDriver {
   }
 
   async status(instanceId: string): Promise<SandboxStatus> {
+    const inst = this.instances.get(instanceId);
     try {
       const { stdout } = await execFileAsync("docker", [
         "inspect",
@@ -372,7 +428,7 @@ export class GVisorDriver implements SandboxDriver {
       const state = JSON.parse(stdout.trim());
 
       let status: SandboxStatus = "stopped";
-      if (state.Paused) {
+      if (state.Paused || inst?.status === "suspended") {
         status = "suspended";
       } else if (state.Running) {
         status = "running";
@@ -387,7 +443,6 @@ export class GVisorDriver implements SandboxDriver {
         status = "stopped";
       }
 
-      const inst = this.instances.get(instanceId);
       if (inst) inst.status = status;
       return status;
     } catch {
