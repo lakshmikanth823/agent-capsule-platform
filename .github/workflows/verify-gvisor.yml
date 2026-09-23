@@ -35,15 +35,111 @@ jobs:
       - name: Install Node dependencies
         run: npm ci
 
-      - name: Make verification script executable
-        run: chmod +x scripts/verify-gvisor.sh
+      - name: Step 1 - System & Kernel Info
+        run: |
+          echo "=== Kernel Architecture ==="
+          uname -a
+          echo "=== Linux Distribution ==="
+          cat /etc/os-release
 
-      - name: Execute Live gVisor Verification Protocol
-        run: ./scripts/verify-gvisor.sh
+      - name: Step 2 - Install gVisor (runsc)
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y apt-transport-https ca-certificates curl gnupg
+          curl -fsSL https://gvisor.dev/archive.key | sudo gpg --dearmor --yes -o /usr/share/keyrings/gvisor-archive-keyring.gpg
+          echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/gvisor-archive-keyring.gpg] https://storage.googleapis.com/gvisor/releases release main" | sudo tee /etc/apt/sources.list.d/gvisor.list > /dev/null
+          sudo apt-get update -y
+          sudo apt-get install -y runsc
+          runsc --version
 
-      - name: Publish Verification Report to Job Summary
+      - name: Step 3 - Register runsc in Docker Daemon & Restart
+        run: |
+          sudo runsc install
+          cat /etc/docker/daemon.json || true
+          sudo systemctl restart docker || sudo service docker restart
+          sleep 2
+          docker info --format '{{json .Runtimes}}'
+
+      - name: Step 4 - Verify Real gVisor Execution Banner
+        run: |
+          DMESG=$(docker run --rm --runtime=runsc alpine dmesg 2>&1 || true)
+          echo "$DMESG"
+          if [[ "$DMESG" != *"Starting gVisor"* ]]; then
+            echo "ERROR: 'Starting gVisor...' banner was NOT found in dmesg output!"
+            exit 1
+          fi
+          echo "CONFIRMED: Real gVisor Sentry kernel executed successfully!"
+
+      - name: Step 5 - Build Monorepo
+        run: npm run build
+
+      - name: Step 6 - Run Sandbox Driver Tests (NO Fallback)
+        env:
+          GVISOR_RUNTIME: runsc
+          GVISOR_PLATFORM: ptrace
+        run: |
+          docker pull node:22-alpine
+          docker pull alpine:latest
+          npx vitest run packages/sandbox-driver/tests/driver_gvisor.test.ts
+          npx vitest run packages/sandbox-driver/tests/driver_conformance.test.ts
+
+      - name: Step 7 - Run Red-Team Security Tests against Real runsc
+        env:
+          GVISOR_RUNTIME: runsc
+          GVISOR_PLATFORM: ptrace
+        run: npm run test:redteam
+
+      - name: Step 8 - Live Penetration Probes (Filesystem & Network Isolation)
+        run: |
+          echo "=== Probe 8A: Host Filesystem Isolation ==="
+          docker run -d --name gv-probe-fs --runtime=runsc --user 1000:1000 --read-only alpine sleep 60
+          if docker exec gv-probe-fs cat /etc/shadow 2>/dev/null; then
+            echo "CRITICAL FAILURE: /etc/shadow was readable inside container!"
+            exit 1
+          else
+            echo "PASS: Non-root user inside runsc was denied access to /etc/shadow."
+          fi
+          if docker exec gv-probe-fs touch /exploit.txt 2>/dev/null; then
+            echo "CRITICAL FAILURE: Writable root filesystem detected in container!"
+            exit 1
+          else
+            echo "PASS: Root filesystem write (/exploit.txt) blocked by --read-only mount."
+          fi
+          docker rm -f gv-probe-fs
+
+          echo "=== Probe 8B: Network Escape Probe under Default Deny ==="
+          docker run -d --name gv-probe-net --runtime=runsc --network none --runtime-flag=--network=none alpine sleep 60
+          if docker exec gv-probe-net ping -c 1 -W 2 8.8.8.8 2>/dev/null; then
+            echo "CRITICAL FAILURE: Outbound ping succeeded under --network=none!"
+            exit 1
+          else
+            echo "PASS: Outbound traffic blocked by Netstack / network namespace isolation."
+          fi
+          docker rm -f gv-probe-net
+
+      - name: Step 9 - Benchmark Cold-Start Latency (10 Runs)
+        run: |
+          node -e '
+            const { execSync } = require("child_process");
+            const times = [];
+            for (let i = 1; i <= 10; i++) {
+              const start = Date.now();
+              execSync("docker run --rm --runtime=runsc alpine echo ready", { stdio: "ignore" });
+              const duration = Date.now() - start;
+              times.push(duration);
+              console.log(`  Iteration ${i}: ${duration}ms`);
+            }
+            times.sort((a, b) => a - b);
+            const p50 = times[4];
+            const p95 = times[9];
+            console.log(`Cold Start Latency Benchmark: p50 = ${p50}ms, p95 = ${p95}ms`);
+          '
+
+      - name: Step 10 - Generate and Publish Verification Record
         if: always()
         run: |
+          chmod +x scripts/verify-gvisor.sh
+          ./scripts/verify-gvisor.sh || true
           if [ -f docs/GVISOR_VERIFICATION.md ]; then
             cat docs/GVISOR_VERIFICATION.md >> $GITHUB_STEP_SUMMARY
           fi

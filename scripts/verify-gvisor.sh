@@ -14,7 +14,7 @@
 # 9. Cold-start benchmark (p50 / p95 across 10 live runs)
 # 10. Record results to docs/GVISOR_VERIFICATION.md
 # ==============================================================================
-set -euo pipefail
+set -eo pipefail
 
 REPORT_FILE="docs/GVISOR_VERIFICATION.md"
 mkdir -p docs
@@ -27,9 +27,8 @@ echo "======================================================================"
 echo ""
 echo "--- [Step 1] System & Kernel Architecture ---"
 KERNEL_INFO=$(uname -a)
-OS_INFO=$(lsb_release -a 2>/dev/null || cat /etc/os-release)
+OS_INFO=$(cat /etc/os-release 2>/dev/null || uname -s)
 echo "Kernel: $KERNEL_INFO"
-echo "OS Info: $OS_INFO"
 
 # Step 2: Install Docker and runsc if not present
 echo ""
@@ -38,7 +37,7 @@ if ! command -v runsc &>/dev/null; then
   echo "runsc not found. Installing from official Google gVisor apt repository..."
   sudo apt-get update -y
   sudo apt-get install -y apt-transport-https ca-certificates curl gnupg
-  curl -fsSL https://gvisor.dev/archive.key | sudo gpg --dearmor -o /usr/share/keyrings/gvisor-archive-keyring.gpg
+  curl -fsSL https://gvisor.dev/archive.key | sudo gpg --dearmor --yes -o /usr/share/keyrings/gvisor-archive-keyring.gpg
   echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/gvisor-archive-keyring.gpg] https://storage.googleapis.com/gvisor/releases release main" | sudo tee /etc/apt/sources.list.d/gvisor.list > /dev/null
   sudo apt-get update -y
   sudo apt-get install -y runsc
@@ -49,8 +48,8 @@ echo "runsc version: $(runsc --version)"
 # Ensure registered in Docker daemon
 echo "Registering runsc runtime in Docker daemon..."
 sudo runsc install
-sudo systemctl restart docker
-sleep 2
+sudo systemctl restart docker || sudo service docker restart || true
+sleep 3
 
 # Step 3: Inspect Docker runtime registration
 echo ""
@@ -81,8 +80,6 @@ echo ""
 echo "--- [Step 5] Enforcing Strict Zero-Fallback Security Posture ---"
 unset ALLOW_DEV_FALLBACK || true
 unset ALLOW_INSECURE_DEV_DRIVER || true
-export ALLOW_DEV_FALLBACK=""
-export ALLOW_INSECURE_DEV_DRIVER=""
 export GVISOR_RUNTIME="runsc"
 export GVISOR_PLATFORM="ptrace"
 echo "ALLOW_DEV_FALLBACK is UNSET."
@@ -91,8 +88,8 @@ echo "GVISOR_RUNTIME=runsc"
 
 # Pre-pull required base images
 echo "Pre-pulling test container images..."
-docker pull node:22-alpine >/dev/null
-docker pull alpine:latest >/dev/null
+docker pull node:22-alpine >/dev/null 2>&1 || true
+docker pull alpine:latest >/dev/null 2>&1 || true
 
 # Step 6: Test suites
 echo ""
@@ -164,22 +161,25 @@ fi
 # Step 9: Cold-start benchmarks
 echo ""
 echo "--- [Step 9] Real runsc Cold-Start Latency Benchmarking (10 Iterations) ---"
-LATENCIES=()
-for i in {1..10}; do
-  START_NS=$(date +%s%N)
-  docker run --rm --runtime=runsc alpine echo "ready" > /dev/null
-  END_NS=$(date +%s%N)
-  DURATION_MS=$(( (END_NS - START_NS) / 1000000 ))
-  LATENCIES+=($DURATION_MS)
-  echo "  Iteration $i: ${DURATION_MS}ms"
-done
+LATENCIES_JSON=$(node -e '
+  const { execSync } = require("child_process");
+  const times = [];
+  for (let i = 1; i <= 10; i++) {
+    const start = Date.now();
+    execSync("docker run --rm --runtime=runsc alpine echo ready", { stdio: "ignore" });
+    const duration = Date.now() - start;
+    times.push(duration);
+    console.error(`  Iteration ${i}: ${duration}ms`);
+  }
+  times.sort((a, b) => a - b);
+  const p50 = times[4];
+  const p95 = times[9];
+  console.log(JSON.stringify({ times, p50, p95 }));
+')
 
-# Sort latencies
-IFS=$'\n' SORTED_LATENCIES=($(sort -n <<<"${LATENCIES[*]}"))
-unset IFS
-
-P50=${SORTED_LATENCIES[4]}
-P95=${SORTED_LATENCIES[9]}
+P50=$(node -e "console.log(JSON.parse(process.argv[1]).p50)" "$LATENCIES_JSON")
+P95=$(node -e "console.log(JSON.parse(process.argv[1]).p95)" "$LATENCIES_JSON")
+SAMPLES=$(node -e "console.log(JSON.parse(process.argv[1]).times.join(', '))" "$LATENCIES_JSON")
 echo "Cold Start Latency Benchmark: p50 = ${P50}ms, p95 = ${P95}ms"
 
 # Step 10: Generate report
@@ -231,7 +231,7 @@ $DMESG_OUTPUT
 
 ## 4. Cold-Start Performance Benchmark (10 Real Starts)
 
-* **Samples (ms):** ${LATENCIES[*]}
+* **Samples (ms):** ${SAMPLES}
 * **p50 Latency:** **${P50}ms**
 * **p95 Latency:** **${P95}ms**
 
