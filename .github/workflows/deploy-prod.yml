@@ -59,7 +59,7 @@ jobs:
       - name: Build and push all images
         if: steps.check-creds.outputs.configured == 'true'
         run: |
-          for SERVICE in control-plane edge-proxy egress-proxy; do
+          for SERVICE in control-plane edge-proxy egress-proxy builder sandbox-runner; do
             docker buildx build \
               --push \
               --file services/${SERVICE}/Dockerfile \
@@ -69,13 +69,6 @@ jobs:
               --cache-to type=inline \
               .
           done
-
-          docker buildx build \
-            --push \
-            --file services/builder/Dockerfile \
-            --tag ${{ env.ECR_REGISTRY }}/capsule/builder:${{ env.IMAGE_TAG }} \
-            --tag ${{ env.ECR_REGISTRY }}/capsule/builder:latest \
-            .
 
           docker buildx build \
             --push \

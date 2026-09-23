@@ -80,15 +80,13 @@ services:
       DASHBOARD_DOMAIN: "${PLATFORM_DOMAIN}"
       APP_BASE_DOMAIN: "${APP_BASE_DOMAIN}"
       APP_DOMAIN: "${APP_BASE_DOMAIN}"
-      IDENTITY_SIGNING_KEY: "${IDENTITY_SIGNING_KEY}"
-      SESSION_SECRET: "${SESSION_SECRET}"
-      CONTROL_PLANE_SERVICE_TOKEN: "${CONTROL_PLANE_SERVICE_TOKEN}"
+      AWS_REGION: "${AWS_REGION}"
+      AWS_SECRET_NAME: "${CP_SECRET_NAME}"
       PLATFORM_ENV: production
       NODE_ENV: production
-      SANDBOX_DRIVER: gvisor
-      DOCKER_HOST: unix:///var/run/docker.sock
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
+      SANDBOX_DRIVER: remote
+      SANDBOX_RUNNER_URL: "http://${SANDBOX_HOST_INTERNAL_IP}:8095"
+      RUNNER_SHARED_SECRET: "${RUNNER_SHARED_SECRET}"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/healthz"]
       interval: 15s

@@ -176,6 +176,9 @@ jobs:
           - name: builder
             context: .
             dockerfile: services/builder/Dockerfile
+          - name: sandbox-runner
+            context: .
+            dockerfile: services/sandbox-runner/Dockerfile
           - name: dashboard
             context: .
             dockerfile: apps/dashboard/Dockerfile

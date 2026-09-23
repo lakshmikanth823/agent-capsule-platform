@@ -99,6 +99,17 @@ jobs:
             ${{ env.ECR_REGISTRY }}/capsule/builder:${{ env.IMAGE_TAG }}
             ${{ env.ECR_REGISTRY }}/capsule/builder:staging-latest
 
+      - name: Build and push — sandbox-runner
+        if: steps.check-creds.outputs.configured == 'true'
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: services/sandbox-runner/Dockerfile
+          push: true
+          tags: |
+            ${{ env.ECR_REGISTRY }}/capsule/sandbox-runner:${{ env.IMAGE_TAG }}
+            ${{ env.ECR_REGISTRY }}/capsule/sandbox-runner:staging-latest
+
       - name: Build and push — dashboard
         if: steps.check-creds.outputs.configured == 'true'
         uses: docker/build-push-action@v5

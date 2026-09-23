@@ -153,6 +153,9 @@ if [ "${ROLE}" = "sandbox-host" ]; then
     # Egress proxy port — allow only from VPC CIDR (set the real CIDR below)
     ufw allow from 10.0.0.0/8 to any port 3128
     ufw allow from 172.16.0.0/12 to any port 3128
+    # Sandbox runner port — allow only from control-plane VPC CIDR
+    ufw allow from 10.0.0.0/8 to any port 8095
+    ufw allow from 172.16.0.0/12 to any port 8095
 fi
 
 ufw --force enable

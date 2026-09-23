@@ -32,6 +32,7 @@ import {
   DevMockSandboxDriver,
   GVisorDriver,
   DockerDevDriver,
+  RemoteSandboxDriver,
   type SandboxDriver,
   type ForwardRequest,
 } from "@capsule/sandbox-driver";
@@ -139,17 +140,30 @@ export function createEdgeProxyServer(options?: {
   const isProduction =
     process.env.NODE_ENV === "production" ||
     process.env.PLATFORM_ENV === "production";
+  const runnerUrl = process.env.SANDBOX_RUNNER_URL;
+  const runnerSecret = process.env.RUNNER_SHARED_SECRET;
   const driverType =
-    process.env.SANDBOX_DRIVER || (isProduction ? "gvisor" : "mock");
+    process.env.SANDBOX_DRIVER ||
+    (isProduction ? (runnerUrl ? "remote" : "gvisor") : "mock");
 
-  if (driverType === "gvisor") {
+  if (runnerUrl || driverType === "remote") {
+    if (!runnerUrl) {
+      throw new Error(
+        "FATAL: SANDBOX_RUNNER_URL must be specified when using remote sandbox driver.",
+      );
+    }
+    driver = new RemoteSandboxDriver({
+      runnerUrl,
+      secret: runnerSecret,
+    });
+  } else if (driverType === "gvisor") {
     driver = new GVisorDriver();
   } else if (driverType === "docker") {
     driver = new DockerDevDriver();
   } else {
     if (isProduction && !process.env.ALLOW_DEV_FALLBACK) {
       throw new Error(
-        "FATAL: Mock sandbox driver is forbidden in production environment. Configure GVisorDriver.",
+        "FATAL: Mock sandbox driver is forbidden in production environment. Configure RemoteSandboxDriver or GVisorDriver.",
       );
     }
     driver = new DevMockSandboxDriver();

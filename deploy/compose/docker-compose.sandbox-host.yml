@@ -49,6 +49,45 @@ services:
     networks:
       - sandbox-net
 
+  # ── Sandbox runner — manages gVisor (runsc) containers on dedicated sandbox host ──
+  sandbox-runner:
+    image: "${ECR_REGISTRY}/capsule/sandbox-runner:${IMAGE_TAG}"
+    restart: always
+    environment:
+      AWS_REGION: "${AWS_REGION}"
+      AWS_SECRET_NAME: "${SH_SECRET_NAME}"
+      PLATFORM_ENV: production
+      SANDBOX_DRIVER: gvisor
+      GVISOR_RUNTIME: runsc
+      RUNNER_SHARED_SECRET: "${RUNNER_SHARED_SECRET}"
+      PORT: "8095"
+      CONTROL_PLANE_URL: "http://${CONTROL_PLANE_INTERNAL_IP}:8000"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /opt/capsule/data:/app/data
+    ports:
+      # Bound to internal VPC LAN for Edge Proxy and Control Plane calls
+      - "8095:8095"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8095/healthz"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    logging:
+      driver: awslogs
+      options:
+        awslogs-group: /capsule/sandbox-runner
+        awslogs-region: "${AWS_REGION}"
+        awslogs-stream-prefix: runner
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: "2048M"
+    networks:
+      - sandbox-net
+
   # ── Egress proxy — enforces allowlist-based outbound network access ────────
   egress-proxy:
     image: "${ECR_REGISTRY}/capsule/egress-proxy:${IMAGE_TAG}"

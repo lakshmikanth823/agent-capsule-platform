@@ -23,6 +23,7 @@ const BUILD_ORDER = [
   { name: "@capsule/sandbox-driver", dir: "packages/sandbox-driver" },
   { name: "capsule (cli)", dir: "packages/cli" },
   { name: "@capsule/mcp-server", dir: "packages/mcp-server" },
+  { name: "@capsule/sandbox-runner", dir: "services/sandbox-runner" },
   { name: "@capsule/builder", dir: "services/builder" },
   { name: "@capsule/edge-proxy", dir: "services/edge-proxy" },
   { name: "@capsule/egress-proxy", dir: "services/egress-proxy" },

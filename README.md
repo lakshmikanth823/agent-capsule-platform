@@ -48,15 +48,16 @@ When an AI agent writes code for an internal tool (a PTO tracker, an on-call das
                      │  • Subdomain Origin Isolation (<app-id>.apps.domain.com)  │
                      │  • Enterprise SSO / SAML / OIDC Handshake & Cookies       │
                      │  • Cryptographic Identity Injection (x-capsule-identity)  │
+                     │  • Zero Docker Socket Access (Strict Network Proxy Only)  │
                      └─────────────┬───────────────────────────────┬─────────────┘
-                                   │                               │
+                                   │                               │ Authenticated Internal API
                  ┌─────────────────▼──────────────┐  ┌─────────────▼─────────────┐
-                 │    Control Plane API (8000)    │  │   Isolated Sandbox Host   │
-                 │  • App & Version Registry      │  │  • gVisor (runsc) Sentry  │
-                 │  • Environment Profiles Policy │  │  • Read-only rootfs       │
-                 │  • SCIM 2.0 & SSO Providers    │  │  • --network none         │
-                 │  • Tamper-Evident Audit Chain  │  │  • Dedicated SQLite DB    │
-                 │  • AI Gateway & Monthly Budget │  │  • Local Blob Storage     │
+                 │    Control Plane API (8000)    │  │   Sandbox Host Runner     │
+                 │  • App & Version Registry      │  │  • Private VPC port 8095  │
+                 │  • Environment Profiles Policy │  │  • gVisor (runsc) Sentry  │
+                 │  • SCIM 2.0 & SSO Providers    │  │  • Read-only rootfs       │
+                 │  • Tamper-Evident Audit Chain  │  │  • --network none         │
+                 │  • AI Gateway & Monthly Budget │  │  • Dedicated SQLite DB    │
                  └─────────────────┬──────────────┘  └─────────────┬─────────────┘
                                    │                               │ Outbound HTTP
                                    │                               ▼
@@ -206,7 +207,7 @@ npm run build
 ### 5. Run Verification Suites
 
 ```bash
-# Run all TypeScript workspace tests (224 tests)
+# Run all TypeScript workspace tests (234 tests: 211 passed, 23 skipped)
 npm run test:ts
 
 # Run all Python control plane tests (100 tests)
@@ -315,11 +316,11 @@ Available MCP Tools:
 
 ## 🚀 Verification Matrix & Deployment Boundary
 
-| Layer                        | Environment             | What is Verified                                                                                                                                                                     | Status                                                                                                           |
-| :--------------------------- | :---------------------- | :----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :--------------------------------------------------------------------------------------------------------------- |
-| **Core CI Pipeline**         | GitHub Actions (Ubuntu) | Topological build, manifest linting, Prettier formatting, TypeScript typecheck, 224 TS tests, 100 Python tests against live PostgreSQL, 27 Red-Team attacks, 5 Trivy container scans | ✅ **100% Green** ([CI Run](https://github.com/lakshmikanth823/agent-capsule-platform/actions/workflows/ci.yml)) |
-| **Proxy Flow Simulation**    | Local / CI              | Subdomain routing, ticket authentication handshake, signed identity injection (`x-capsule-identity`), share-based RBAC, and SQLite data isolation                                    | ✅ **Verified** (`proxy-leave-tracker-flow.test.ts`)                                                             |
-| **Cloud Staging Deployment** | AWS (EC2 + ECR)         | Automated OIDC authentication, container build & push, SSH deployment to staging host, `/healthz` validation                                                                         | 🟡 **Pipeline Ready** (Awaiting target AWS account credentials & dedicated gVisor EC2 host)                      |
+| Layer                        | Environment             | What is Verified                                                                                                                                                                                              | Status                                                                                                           |
+| :--------------------------- | :---------------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | :--------------------------------------------------------------------------------------------------------------- |
+| **Core CI Pipeline**         | GitHub Actions (Ubuntu) | Topological build, manifest linting, Prettier formatting, TypeScript typecheck, 234 TS tests (211 passed, 23 skipped), 100 Python tests against live PostgreSQL, 27 Red-Team attacks, 6 Trivy container scans | ✅ **100% Green** ([CI Run](https://github.com/lakshmikanth823/agent-capsule-platform/actions/workflows/ci.yml)) |
+| **Proxy Flow Simulation**    | Local / CI              | Subdomain routing, ticket authentication handshake, signed identity injection (`x-capsule-identity`), share-based RBAC, and SQLite data isolation                                                             | ✅ **Verified** (`proxy-leave-tracker-flow.test.ts`)                                                             |
+| **Cloud Staging Deployment** | AWS (EC2 + ECR)         | Automated OIDC authentication, container build & push, SSH deployment to staging host, `/healthz` validation                                                                                                  | 🟡 **Pipeline Ready** (Awaiting target AWS account credentials & dedicated gVisor EC2 host)                      |
 
 ---
 
