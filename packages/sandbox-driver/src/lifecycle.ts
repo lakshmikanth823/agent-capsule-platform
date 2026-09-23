@@ -92,6 +92,7 @@ export class CapsuleLifecycleManager {
     versionId: string;
     appKey: string;
     orgId?: string;
+    callerOrgId?: string;
     bundlePath: string;
     manifest?: Record<string, any>;
     customDataDir?: string;
@@ -177,6 +178,7 @@ export class CapsuleLifecycleManager {
       versionId: params.versionId,
       appKey: params.appKey,
       orgId: params.orgId,
+      callerOrgId: params.callerOrgId,
       bundlePath: path.resolve(params.bundlePath),
       dataDir: effectiveDataDir,
       manifest: params.manifest,

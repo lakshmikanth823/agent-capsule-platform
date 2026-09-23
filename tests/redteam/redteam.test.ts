@@ -41,6 +41,7 @@ import {
   createSandboxRunnerServer,
   isVpcCidr,
   timingSafeCompare,
+  RemoteSandboxDriver,
 } from "../../packages/sandbox-driver/src/index.js";
 
 describe("Red-Team Security Test Suite (Prompt 16)", () => {
@@ -751,6 +752,40 @@ describe("Red-Team Security Test Suite (Prompt 16)", () => {
       expect(res.statusCode).toBe(200);
       expect(res.body.capsuleId).toBe("legit-app");
       expect(res.body.status).toBe("running");
+      expect(driverStartCalls).toBe(1);
+    });
+
+    it("should verify RemoteSandboxDriver transmits x-caller-org-id and enforces cross-tenant boundary end-to-end", async () => {
+      const client = new RemoteSandboxDriver({
+        runnerUrl: `http://127.0.0.1:${runnerPort}`,
+        secret: testSecret,
+      });
+
+      // 1. Cross-tenant attempt via RemoteSandboxDriver fails
+      await expect(
+        client.start({
+          capsuleId: "confidential-capsule",
+          appKey: "confidential",
+          versionId: "v1.0.0",
+          orgId: "org_victim",
+          callerOrgId: "org_attacker",
+          bundlePath: "/tmp/bundle",
+          dataDir: "/tmp/data",
+        }),
+      ).rejects.toThrow("CROSS_TENANT_ACCESS_DENIED");
+      expect(driverStartCalls).toBe(0);
+
+      // 2. Legitimate tenant attempt via RemoteSandboxDriver succeeds
+      const instance = await client.start({
+        capsuleId: "confidential-capsule",
+        appKey: "confidential",
+        versionId: "v1.0.0",
+        orgId: "org_owner",
+        callerOrgId: "org_owner",
+        bundlePath: "/tmp/bundle",
+        dataDir: "/tmp/data",
+      });
+      expect(instance.capsuleId).toBe("confidential-capsule");
       expect(driverStartCalls).toBe(1);
     });
   });

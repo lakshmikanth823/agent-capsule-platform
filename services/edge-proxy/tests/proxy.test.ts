@@ -580,5 +580,65 @@ describe.skipIf(!hasDocker)(
       expect(htmlRes.headers["x-frame-options"]).toBe("DENY");
       expect(htmlRes.body).toContain("Leave Tracker Capsule");
     }, 45000);
+
+    it("Security: strips spoofed client headers and derives tenant identity strictly from verified session", async () => {
+      // 1. Authenticate Alice (org_acme)
+      const ticketRes = await makeRequest({
+        host: `${dashboardDomain}:${serverPort}`,
+        path: `/auth/ticket?user=alice&target_app=leave-tracker&return_to=http://leave-tracker.${appDomain}:${serverPort}/auth/callback`,
+      });
+      const callbackUrl = new URL(ticketRes.headers.location || "");
+      const ticket = callbackUrl.searchParams.get("ticket");
+
+      const callbackRes = await makeRequest({
+        host: `leave-tracker.${appDomain}:${serverPort}`,
+        path: `/auth/callback?ticket=${ticket}&return_to=/`,
+      });
+      const cookie =
+        callbackRes.headers["set-cookie"]?.[0]?.split(";")[0] || "";
+
+      // 2. Register mock handler to capture the exact ForwardRequest passed into sandbox
+      let capturedReq: ForwardRequest | null = null;
+      mockDriver.setMockResponse("/api/test-sec-headers", (req) => {
+        capturedReq = req;
+        return {
+          statusCode: 200,
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ ok: true }),
+        };
+      });
+
+      // 3. Client attempts to inject spoofed isolation & auth headers
+      const res = await makeRequest({
+        host: `leave-tracker.${appDomain}:${serverPort}`,
+        path: "/api/test-sec-headers",
+        headers: {
+          cookie,
+          "x-caller-org-id": "org_attacker_spoofed",
+          "x-capsule-identity": "forged_client_token",
+          authorization: "Bearer attacker_secret",
+        },
+      });
+
+      expect(res.statusCode).toBe(200);
+      expect(capturedReq).not.toBeNull();
+
+      // Ensure client spoofed headers were stripped
+      expect(capturedReq!.headers["x-caller-org-id"]).toBeUndefined();
+      expect(capturedReq!.headers["authorization"]).toBeUndefined();
+      expect(capturedReq!.headers["x-capsule-identity"]).not.toBe(
+        "forged_client_token",
+      );
+
+      // Verify that the injected identity token is freshly signed with Alice's verified session org_id
+      const verified = verifyJwt<any>(
+        capturedReq!.headers["x-capsule-identity"],
+        {
+          "key-2026-09": "dev-identity-secret-key-must-be-32-bytes-long!",
+        },
+      );
+      expect(verified?.payload.org_id).toBe("org_acme");
+      expect(verified?.payload.sub).toBe("usr_alice_123");
+    });
   },
 );

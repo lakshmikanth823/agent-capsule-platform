@@ -61,9 +61,13 @@ export class RemoteSandboxDriver implements SandboxDriver {
   }
 
   async start(spec: SandboxSpec): Promise<SandboxInstance> {
+    const headers = this.getHeaders();
+    if (spec.callerOrgId) {
+      headers["x-caller-org-id"] = spec.callerOrgId;
+    }
     const res = await fetch(`${this.runnerUrl}/v1/sandboxes/start`, {
       method: "POST",
-      headers: this.getHeaders(),
+      headers,
       body: JSON.stringify(spec),
       signal: AbortSignal.timeout(this.timeoutMs),
     });
@@ -75,10 +79,13 @@ export class RemoteSandboxDriver implements SandboxDriver {
         errJson = JSON.parse(errText);
       } catch {}
       const err = new Error(
-        errJson?.message ||
-          `Remote runner failed to start sandbox (HTTP ${res.status}): ${errText}`,
+        errJson?.error
+          ? `[${errJson.error}] ${errJson.message}`
+          : errJson?.message ||
+              `Remote runner failed to start sandbox (HTTP ${res.status}): ${errText}`,
       );
-      if (errJson?.code) (err as any).code = errJson.code;
+      if (errJson?.code || errJson?.error)
+        (err as any).code = errJson.code || errJson.error;
       if (res.status === 503) (err as any).code = "SANDBOX_UNAVAILABLE";
       throw err;
     }

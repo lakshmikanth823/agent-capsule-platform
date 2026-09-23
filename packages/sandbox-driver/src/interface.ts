@@ -19,6 +19,7 @@ export interface SandboxSpec {
   versionId: string;
   appKey: string;
   orgId?: string;
+  callerOrgId?: string;
   bundlePath: string; // path to application bundle (tar.gz or extracted dir)
   dataDir: string; // persistent per-capsule directory for SQLite
   manifest?: Record<string, any>;

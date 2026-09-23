@@ -713,6 +713,15 @@ export function createEdgeProxyServer(options?: {
 
       const forwardHeaders: Record<string, string> = {};
       for (const [k, v] of Object.entries(req.headers)) {
+        const lower = k.toLowerCase();
+        // Prevent untrusted client spoofing of platform identity, auth, and isolation headers
+        if (
+          lower === "x-capsule-identity" ||
+          lower === "x-caller-org-id" ||
+          lower === "authorization"
+        ) {
+          continue;
+        }
         if (v && typeof v === "string") forwardHeaders[k] = v;
       }
 
@@ -752,11 +761,13 @@ export function createEdgeProxyServer(options?: {
         body: rawBody,
       };
 
-      // Prepare sandbox spec
+      // Prepare sandbox spec with tenant isolation context strictly from verified session JWT
       const spec = await lifecycleManager.prepareCapsule({
         capsuleId: app.id,
         versionId: app.currentVersionId || "v1",
         appKey: app.appKey,
+        orgId: app.organizationId,
+        callerOrgId: session.org_id, // Strictly derived from verified session JWT, NEVER from req.headers
         bundlePath: app.bundlePath || path.resolve(`examples/${app.appKey}`),
         customDataDir: app.dataDir,
         manifest: app.manifest,
